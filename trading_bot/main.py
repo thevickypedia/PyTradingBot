@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 from typing import List, Dict, Any
 
@@ -27,10 +28,11 @@ LOGGER.addHandler(hdlr=handler)
 
 TWELVEDATA_API_KEY = (
         os.environ.get("TWELVEDATA_API_KEY") or os.environ.get("TWELVEDATA_APIKEY") or
-        os.environ.get("twelvedata_api_key") or os.environ.get("twelvedata_apikey")
+        os.environ.get("twelvedata_api_key") or os.environ.get("twelvedata_apikey") or
+        "demo"
 )
 
-filters_dict = {
+DEFAULT_FILTERS = {
     'Exchange': 'NASDAQ',
     'Country': 'USA',
     'Average Volume': 'Over 500K',
@@ -40,14 +42,6 @@ filters_dict = {
     'Change': 'Up 5%',
     'RSI (14)': 'Not Overbought (<60)',
 }
-
-foverview = Overview()
-foverview.set_filter(filters_dict=filters_dict)
-scan_df = foverview.screener_view()
-
-ftech = Technical()
-ftech.set_filter(filters_dict=filters_dict)
-tech_df = ftech.screener_view()
 
 
 def enrich_ticker(ticker):
@@ -163,7 +157,7 @@ def get_candle_signal_yfinance(ticker):
         cross = 'CROSS UP' if ema_cross_up else 'CROSS DOWN' if ema_cross_down else 'NO CROSS'
         return pd.Series({'YF_Signal': signal, 'EMA_Cross': cross})
     except Exception as error:
-        print(f"Error fetching yfinance data for {ticker} : {error}")
+        LOGGER.error(f"Error fetching yfinance data for {ticker} : {error}")
         return pd.Series({'YF_Signal': 'Error', 'EMA_Cross': 'Error'})
 
 
@@ -211,7 +205,20 @@ def score_stock(row):
     return score
 
 
-def builder(filepath: str = None, to_dict: bool = False) -> pd.DataFrame | List[Dict[str, Any]]:
+def builder(filepath: str = None, to_dict: bool = False, filters: dict | None = None) -> pd.DataFrame | List[
+    Dict[str, Any]]:
+    # Use caller-supplied filters or fall back to module-level defaults
+    _filters = filters or DEFAULT_FILTERS
+
+    # Run screeners
+    foverview = Overview()
+    foverview.set_filter(filters_dict=_filters)
+    scan_df = foverview.screener_view()
+
+    ftech = Technical()
+    ftech.set_filter(filters_dict=_filters)
+    tech_df = ftech.screener_view()
+
     # Build final dataframe
     final_df = scan_df.merge(tech_df[['Ticker', 'Beta', 'ATR', 'SMA20', 'SMA50', 'RSI', 'Gap']], on='Ticker')
     enriched = final_df['Ticker'].apply(enrich_ticker)
@@ -251,15 +258,22 @@ def builder(filepath: str = None, to_dict: bool = False) -> pd.DataFrame | List[
                 raise ValueError("Unsupported file format. Use .csv, .xlsx, .json, or .html")
 
     if to_dict:
-        return filtered_df.to_dict(orient='records')
+        records = filtered_df.to_dict(orient='records')
+
+        # Replace float NaN with None for safe Jinja2 / JSON rendering.
+        # df.where() cannot guarantee None for numeric columns, so we check each value.
+        def _clean(v):
+            try:
+                return None if (isinstance(v, float) and math.isnan(v)) else v
+            except (TypeError, ValueError):
+                return v
+
+        return [{k: _clean(v) for k, v in row.items()} for row in records]
 
     return filtered_df
 
 
 if __name__ == '__main__':
-    # TODO: Include timestamp in HTML
-    #   Convert to dict and render with Jinja2 template for better formatting and styling
-    #   Add modifications through API and full control of the bot through a dashboard
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     print(builder(filepath="index.html"))

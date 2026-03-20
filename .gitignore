@@ -209,5 +209,6 @@ __marimo__/
 # Output file formats
 *.json
 *.html
+!dashboard.html
 *.xlsx
 *.csv
