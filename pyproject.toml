@@ -25,6 +25,7 @@ packages = [
 
 [tool.setuptools.dynamic]
 version = {attr = "pytradingbot.version"}
+dependencies = { file = ["requirements.txt"] }
 
 [project.optional-dependencies]
 dev = ["pre-commit"]
