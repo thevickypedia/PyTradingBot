@@ -1,13 +1,22 @@
+import warnings
 from contextlib import asynccontextmanager
 from typing import List
 
+import uiauth
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
 from trading_bot import storage
-from trading_bot.constants import DEFAULT_FILTERS, LOGGER, TEMPLATES_DIR, ScanStatus
+from trading_bot.constants import (
+    DEFAULT_FILTERS,
+    LOGGER,
+    PASSWORD,
+    TEMPLATES_DIR,
+    USERNAME,
+    ScanStatus,
+)
 from trading_bot.routes import (
     dashboard,
     get_logs,
@@ -24,7 +33,6 @@ async def lifespan(app_: FastAPI):
     Loads the latest historical snapshot from the shelve DB so the dashboard
     shows data immediately on restart without requiring a fresh scan.
     """
-    app_.routes.extend(get_routes())
     app_.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
     # Pre-populate from the last saved scan (if any)
@@ -93,3 +101,26 @@ def get_routes() -> List[APIRoute]:
 
 app = FastAPI(title="Trading Bot Dashboard", lifespan=lifespan)
 app.__name__ = "app"
+api_routes = get_routes()
+if all((USERNAME, PASSWORD)):
+    uiauth.protect(
+        app=app,
+        username=USERNAME,
+        password=PASSWORD,
+        routes=api_routes,
+    )
+else:
+    warnings.warn(
+        "USERNAME and PASSWORD are not set. API endpoints are unprotected.",
+        UserWarning,
+    )
+    app.routes.extend(get_routes())
+
+# TODO:
+#   Include favicon.ico
+#   Support scheduled runs
+#   Add CORS protection
+#   Add notifications through Telegram and Gmail
+#   Extend Telegram support to score an individual ticker
+#   Consider replacing Twelve Data with an open-source alternative
+#   Include multiple candlestick trackers

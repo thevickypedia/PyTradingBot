@@ -67,3 +67,7 @@ SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv
 # Datastore
 DB_DIR = pathlib.Path(__file__).parent.parent / "data"
 DB_PATH = str(DB_DIR / "scan_history")
+
+# Credentials
+USERNAME = os.getenv("USERNAME") or os.getenv("username") or os.getenv("USER") or os.getenv("user")
+PASSWORD = os.getenv("PASSWORD") or os.getenv("password") or os.getenv("PASS") or os.getenv("pass")
