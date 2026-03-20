@@ -1,8 +1,7 @@
 import sys
 
 from pytradingbot.server import start
-
-version = "0.0.0a0"
+from pytradingbot.version import __version__
 
 
 def commandline() -> None:
@@ -20,7 +19,7 @@ def commandline() -> None:
     start_server = "start" in sys.argv
 
     if print_ver:
-        print(f"PyTradingBot {version}")
+        print(f"PyTradingBot {__version__}")
         sys.exit(0)
 
     options = {

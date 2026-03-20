@@ -24,7 +24,7 @@ packages = [
 "pytradingbot.templates" = ["*.html"]
 
 [tool.setuptools.dynamic]
-version = {attr = "pytradingbot.version"}
+version = { attr = "pytradingbot.version.__version__" }
 dependencies = { file = ["requirements.txt"] }
 
 [project.optional-dependencies]
