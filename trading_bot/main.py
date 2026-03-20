@@ -66,7 +66,7 @@ def enrich_ticker(ticker):
 def get_candle_signal_twelvedata(ticker):
     """Pull last 5 x 5min candles from twelvedata and determine buy/sell signal based on direction."""
     try:
-        url = f'https://api.twelvedata.com/time_series'
+        url = 'https://api.twelvedata.com/time_series'
         params = {
             'symbol': ticker,
             'interval': '5min',
@@ -74,6 +74,8 @@ def get_candle_signal_twelvedata(ticker):
             'apikey': TWELVEDATA_API_KEY,
         }
         response = requests.get(url, params=params)
+        response.raise_for_status()
+        assert response.ok, f"Twelvedata API request failed: [{response.status_code}] {response.text}"
         data = response.json()
 
         if 'values' not in data:
@@ -109,7 +111,12 @@ def get_candle_signal_twelvedata(ticker):
         else:
             signal = 'NEUTRAL'
 
-        trend = 'UPTREND' if higher_high and higher_low else 'DOWNTREND' if not higher_high and not higher_low else 'SIDEWAYS'
+        if higher_high and higher_low:
+            trend = 'UPTREND'
+        elif not higher_high and not higher_low:
+            trend = 'DOWNTREND'
+        else:
+            trend = 'SIDEWAYS'
         return pd.Series({'TD_Signal': signal, 'TD_Trend': trend})
     except Exception as error:
         LOGGER.error(f"Error fetching twelvedata data for {ticker} : {error}")
@@ -250,6 +257,9 @@ def builder(filepath: str = None, to_dict: bool = False) -> pd.DataFrame | List[
 
 
 if __name__ == '__main__':
+    # TODO: Include timestamp in HTML
+    #   Convert to dict and render with Jinja2 template for better formatting and styling
+    #   Add modifications through API and full control of the bot through a dashboard
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     print(builder(filepath="index.html"))
