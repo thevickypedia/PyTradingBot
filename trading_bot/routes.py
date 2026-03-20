@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from .main import builder, DEFAULT_FILTERS
+from .main import builder, DEFAULT_FILTERS, LOGGER
 
 router = APIRouter()
 
@@ -65,8 +65,10 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
             request.app.state.last_scanned = datetime.now()
             request.app.state.scan_status = "done"
         except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Scan failed with filters %s: %s", filters, exc)
             request.app.state.scan_status = "error"
-            request.app.state.scan_error = str(exc)
+            # Truncate to avoid flooding the UI with a multi-KB traceback
+            request.app.state.scan_error = str(exc)[:300]
 
     asyncio.create_task(_run_scan())
     return JSONResponse({"status": "started"}, status_code=202)

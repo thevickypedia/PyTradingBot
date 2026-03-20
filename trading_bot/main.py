@@ -49,12 +49,20 @@ def enrich_ticker(ticker):
         stock = finvizfinance(ticker)
         news = stock.ticker_news()
         insider = stock.ticker_inside_trader()
-        latest_news = news['Title'].iloc[0] if not news.empty else 'No news'
-        insider_action = insider['Transaction'].iloc[0] if not insider.empty else 'No insider data'
+        latest_news = (
+            news['Title'].iloc[0]
+            if news is not None and not news.empty
+            else 'No news'
+        )
+        insider_action = (
+            insider['Transaction'].iloc[0]
+            if insider is not None and not insider.empty
+            else 'No insider data'
+        )
         return pd.Series({'Latest_News': latest_news, 'Insider_Action': insider_action})
     except Exception as err:
         LOGGER.error(f"Error enriching ticker {ticker}: {err}")
-        return pd.Series({'Latest_News': pd.NA, 'Insider_Action': pd.NA})
+        return pd.Series({'Latest_News': 'N/A', 'Insider_Action': 'N/A'})
 
 
 def get_candle_signal_twelvedata(ticker):
@@ -210,14 +218,30 @@ def builder(filepath: str = None, to_dict: bool = False, filters: dict | None = 
     # Use caller-supplied filters or fall back to module-level defaults
     _filters = filters or DEFAULT_FILTERS
 
+    LOGGER.info(f"Starting scan with filters: {_filters}")
+
     # Run screeners
     foverview = Overview()
     foverview.set_filter(filters_dict=_filters)
     scan_df = foverview.screener_view()
+    if scan_df is None or scan_df.empty:
+        LOGGER.warning("Overview screener returned no results — check filter values: %s", _filters)
+        return [] if to_dict else pd.DataFrame(columns=[
+            'Ticker', 'Price', 'Change', 'Volume', 'RSI', 'ATR',
+            'TD_Signal', 'TD_Trend', 'YF_Signal', 'EMA_Cross',
+            'Score', 'Latest_News', 'Insider_Action',
+        ])
 
     ftech = Technical()
     ftech.set_filter(filters_dict=_filters)
     tech_df = ftech.screener_view()
+    if tech_df is None or tech_df.empty:
+        LOGGER.warning("Technical screener returned no results — check filter values: %s", _filters)
+        return [] if to_dict else pd.DataFrame(columns=[
+            'Ticker', 'Price', 'Change', 'Volume', 'RSI', 'ATR',
+            'TD_Signal', 'TD_Trend', 'YF_Signal', 'EMA_Cross',
+            'Score', 'Latest_News', 'Insider_Action',
+        ])
 
     # Build final dataframe
     final_df = scan_df.merge(tech_df[['Ticker', 'Beta', 'ATR', 'SMA20', 'SMA50', 'RSI', 'Gap']], on='Ticker')
