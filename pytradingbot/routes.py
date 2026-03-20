@@ -8,14 +8,14 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from trading_bot import storage
-from trading_bot.constants import (
+from pytradingbot import storage
+from pytradingbot.constants import (
     DEFAULT_FILTERS,
     LOGGER,
     SCAN_COOLDOWN_SECONDS,
     ScanStatus,
 )
-from trading_bot.main import builder
+from pytradingbot.main import builder
 
 
 class ScanRequest(BaseModel):
@@ -151,7 +151,7 @@ def get_versions() -> JSONResponse:
 def get_logs() -> JSONResponse:
     """Stream the latest log file (last 500 lines)."""
     log_dir = Path(__file__).parent.parent / "logs"
-    files = sorted(log_dir.glob("trading_bot_*.log"), reverse=True) if log_dir.exists() else []
+    files = sorted(log_dir.glob("pytradingbot_*.log"), reverse=True) if log_dir.exists() else []
     if not files:
         return JSONResponse({"content": "No log files found.", "filename": None, "total_lines": 0})
     latest = files[0]

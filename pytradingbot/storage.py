@@ -13,7 +13,7 @@ Schema
 import shelve
 from typing import Dict, List, Optional
 
-from trading_bot.constants import DB_DIR, DB_PATH, LOGGER
+from pytradingbot.constants import DB_DIR, DB_PATH, LOGGER
 
 
 def save_scan(timestamp: str, data: list) -> None:

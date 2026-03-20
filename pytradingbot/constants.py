@@ -25,7 +25,7 @@ os.makedirs("logs", exist_ok=True)
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 handler = logging.FileHandler(
-    filename=os.path.join("logs", f"trading_bot_{datetime.now().strftime('%Y-%m-%d')}.log"),
+    filename=os.path.join("logs", f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
 handler.setFormatter(

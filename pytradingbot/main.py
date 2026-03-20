@@ -7,7 +7,7 @@ from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
-from trading_bot.constants import DEFAULT_FILTERS, LOGGER
+from pytradingbot.constants import DEFAULT_FILTERS, LOGGER
 
 
 def enrich_ticker(ticker: str) -> pd.Series:

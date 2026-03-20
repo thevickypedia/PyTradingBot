@@ -1,16 +1,9 @@
-"""Entry point:
-
-    python -m trading_bot.server
-or:
-    uvicorn trading_bot.server:app
-"""
-
 import pathlib
 
 import uvicorn
 
-from trading_bot.api import app
-from trading_bot.constants import HOST, PORT
+from pytradingbot.api import app
+from pytradingbot.constants import HOST, PORT
 
 
 def start() -> None:

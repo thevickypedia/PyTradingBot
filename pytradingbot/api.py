@@ -8,8 +8,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
-from trading_bot import storage
-from trading_bot.constants import (
+from pytradingbot import storage
+from pytradingbot.constants import (
     DEFAULT_FILTERS,
     LOGGER,
     PASSWORD,
@@ -17,7 +17,7 @@ from trading_bot.constants import (
     USERNAME,
     ScanStatus,
 )
-from trading_bot.routes import (
+from pytradingbot.routes import (
     dashboard,
     get_logs,
     get_versions,
