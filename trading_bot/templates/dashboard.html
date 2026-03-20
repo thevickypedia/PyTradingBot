@@ -219,6 +219,29 @@
               <div class="col-6 col-md-3 mb-3"><div class="stat-card"><div class="stat-value" style="color:var(--yellow);">{{ ns.top }}</div><div class="stat-label">Top Score</div></div></div>
             </div>
 
+            {# ── Sort-weight macros ── #}
+            {# Emit a numeric key used by data-order so DataTables sorts signals semantically #}
+            {% macro sig_w(v) -%}
+              {%- if v == 'STRONG BUY' -%}5
+              {%- elif v == 'BUY' -%}4
+              {%- elif v == 'NEUTRAL' -%}3
+              {%- elif v == 'WEAK - WAIT' -%}2
+              {%- elif v == 'SELL' -%}1
+              {%- else -%}0{%- endif -%}
+            {%- endmacro %}
+            {% macro trend_w(v) -%}
+              {%- if v == 'UPTREND' -%}3
+              {%- elif v == 'SIDEWAYS' -%}2
+              {%- elif v == 'DOWNTREND' -%}1
+              {%- else -%}0{%- endif -%}
+            {%- endmacro %}
+            {% macro cross_w(v) -%}
+              {%- if v == 'CROSS UP' -%}3
+              {%- elif v == 'NO CROSS' -%}2
+              {%- elif v == 'CROSS DOWN' -%}1
+              {%- else -%}0{%- endif -%}
+            {%- endmacro %}
+
             {# Table #}
             <div class="table-card mb-5">
               <div class="table-card-header">
@@ -241,25 +264,29 @@
                   <tbody>
                     {% for s in stocks %}
                     <tr>
-                      {# Ticker #}
-                      <td><span class="ticker">{{ s.Ticker }}</span></td>
+                      {# Ticker — sort alphabetically on raw ticker symbol #}
+                      <td data-order="{{ s.Ticker }}"><span class="ticker">{{ s.Ticker }}</span></td>
 
-                      {# Price #}
-                      <td>${{ "%.2f"|format(s.Price|float) if s.Price is not none else '—' }}</td>
+                      {# Price — sort on raw float #}
+                      <td data-order="{{ s.Price|float if s.Price is not none else -1 }}">
+                        {{ '$' ~ "%.2f"|format(s.Price|float) if s.Price is not none else '—' }}
+                      </td>
 
-                      {# Change % #}
-                      <td>
+                      {# Change % — sort on raw float (preserves negative) #}
+                      <td data-order="{{ s.Change|float if s.Change is not none else -9999 }}">
                         {% if s.Change is not none %}
                           {% set chg = s.Change|float %}
                           <span class="{{ 'pos' if chg >= 0 else 'neg' }}">{{ '+' if chg >= 0 else '' }}{{ "%.2f"|format(chg) }}%</span>
                         {% else %}—{% endif %}
                       </td>
 
-                      {# Volume #}
-                      <td>{{ "{:,.0f}".format(s.Volume|float) if s.Volume is not none else '—' }}</td>
+                      {# Volume — sort on raw float (comma-formatted display) #}
+                      <td data-order="{{ s.Volume|float if s.Volume is not none else 0 }}">
+                        {{ "{:,.0f}".format(s.Volume|float) if s.Volume is not none else '—' }}
+                      </td>
 
-                      {# RSI #}
-                      <td>
+                      {# RSI — sort on raw float #}
+                      <td data-order="{{ s.RSI|float if s.RSI is not none else -1 }}">
                         {% if s.RSI is not none %}
                           {% set rsi = s.RSI|float %}
                           <span class="{{ 'pos' if rsi < 50 else ('neg' if rsi > 65 else '') }}"
@@ -269,12 +296,14 @@
                         {% else %}—{% endif %}
                       </td>
 
-                      {# ATR #}
-                      <td>{{ "%.2f"|format(s.ATR|float) if s.ATR is not none else '—' }}</td>
+                      {# ATR — sort on raw float #}
+                      <td data-order="{{ s.ATR|float if s.ATR is not none else -1 }}">
+                        {{ "%.2f"|format(s.ATR|float) if s.ATR is not none else '—' }}
+                      </td>
 
-                      {# TD Signal #}
-                      <td>
-                        {% set sig = s.TD_Signal|string if s.TD_Signal is not none else '—' %}
+                      {# TD Signal — sort on semantic weight (STRONG BUY=5 … SELL=1) #}
+                      {% set sig = s.TD_Signal|string if s.TD_Signal is not none else '—' %}
+                      <td data-order="{{ sig_w(sig) }}">
                         {% if   sig == 'STRONG BUY'  %}<span class="pill pill-strong-buy">{{ sig }}</span>
                         {% elif sig == 'BUY'         %}<span class="pill pill-buy">{{ sig }}</span>
                         {% elif sig == 'SELL'        %}<span class="pill pill-sell">{{ sig }}</span>
@@ -284,9 +313,9 @@
                         {% endif %}
                       </td>
 
-                      {# TD Trend #}
-                      <td>
-                        {% set tr = s.TD_Trend|string if s.TD_Trend is not none else '—' %}
+                      {# TD Trend — sort on semantic weight (UPTREND=3 … DOWNTREND=1) #}
+                      {% set tr = s.TD_Trend|string if s.TD_Trend is not none else '—' %}
+                      <td data-order="{{ trend_w(tr) }}">
                         {% if   tr == 'UPTREND'   %}<span class="pill pill-up">▲ {{ tr }}</span>
                         {% elif tr == 'DOWNTREND' %}<span class="pill pill-down">▼ {{ tr }}</span>
                         {% elif tr == 'SIDEWAYS'  %}<span class="pill pill-side">— {{ tr }}</span>
@@ -294,9 +323,9 @@
                         {% endif %}
                       </td>
 
-                      {# YF Signal #}
-                      <td>
-                        {% set ys = s.YF_Signal|string if s.YF_Signal is not none else '—' %}
+                      {# YF Signal — sort on semantic weight #}
+                      {% set ys = s.YF_Signal|string if s.YF_Signal is not none else '—' %}
+                      <td data-order="{{ sig_w(ys) }}">
                         {% if   ys == 'STRONG BUY'  %}<span class="pill pill-strong-buy">{{ ys }}</span>
                         {% elif ys == 'BUY'         %}<span class="pill pill-buy">{{ ys }}</span>
                         {% elif ys == 'SELL'        %}<span class="pill pill-sell">{{ ys }}</span>
@@ -306,29 +335,29 @@
                         {% endif %}
                       </td>
 
-                      {# EMA Cross #}
-                      <td>
-                        {% set xc = s.EMA_Cross|string if s.EMA_Cross is not none else '—' %}
+                      {# EMA Cross — sort on semantic weight (CROSS UP=3, NO CROSS=2, CROSS DOWN=1) #}
+                      {% set xc = s.EMA_Cross|string if s.EMA_Cross is not none else '—' %}
+                      <td data-order="{{ cross_w(xc) }}">
                         {% if   xc == 'CROSS UP'   %}<span class="pill pill-buy">↑ {{ xc }}</span>
                         {% elif xc == 'CROSS DOWN' %}<span class="pill pill-sell">↓ {{ xc }}</span>
                         {% else                    %}<span class="pill pill-neutral">{{ xc }}</span>
                         {% endif %}
                       </td>
 
-                      {# Score #}
-                      <td>
+                      {# Score — sort on raw int #}
+                      <td data-order="{{ s.Score|int if s.Score is not none else -9999 }}">
                         {% if s.Score is not none %}
                           {% set sc = s.Score|int %}
                           <strong class="{{ 'score-hi' if sc >= 60 else ('score-md' if sc >= 30 else ('score-lo' if sc >= 0 else 'score-neg')) }}">{{ sc }}</strong>
                         {% else %}—{% endif %}
                       </td>
 
-                      {# Latest News #}
+                      {# Latest News — plain text, no sort weirdness #}
                       <td class="news-cell" title="{{ s.Latest_News|string if s.Latest_News is not none else '' }}">
                         {{ s.Latest_News|string if s.Latest_News is not none else '—' }}
                       </td>
 
-                      {# Insider Action — always coerce to string first to avoid float-NaN 'in' crash #}
+                      {# Insider Action — coerce to string first to avoid float-NaN 'in' crash #}
                       <td>
                         {% set ia = s.Insider_Action|string if s.Insider_Action is not none else '—' %}
                         {% if   'Buy'  in ia %}<span class="pill pill-buy">🔼 {{ ia }}</span>
@@ -659,9 +688,8 @@ function initDataTable () {
     pageLength: 25,
     lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'All']],
     columnDefs: [
-      { orderable: false, targets: [11, 12] },
+      { orderable: false, targets: [11, 12] },          // News & Insider — unsortable
       { className: 'text-center', targets: [1,2,3,4,5,6,7,8,9,10,12] },
-      { type: 'num', targets: [1,2,3,4,5,10] },
     ],
     language: {
       search: '', searchPlaceholder: '🔍  Filter stocks…',
