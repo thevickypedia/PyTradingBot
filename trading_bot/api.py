@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -7,7 +8,7 @@ from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
 from trading_bot.main import DEFAULT_FILTERS
-from trading_bot.routes import dashboard, start_scan, scan_status, get_logs
+from trading_bot.routes import dashboard, get_logs, scan_status, start_scan
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -25,7 +26,8 @@ async def lifespan(app_: FastAPI):
     yield  # Server is running
 
 
-def get_routes():
+def get_routes() -> List[APIRoute]:
+    """Get all API routes."""
     return [
         APIRoute(
             path="/health",

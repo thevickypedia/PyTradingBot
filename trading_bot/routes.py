@@ -11,15 +11,14 @@ from trading_bot.constants import DEFAULT_FILTERS, LOGGER
 from trading_bot.main import builder
 
 
-# ── Request schemas ──────────────────────────────────────────────────────────
-
 class ScanRequest(BaseModel):
+    """Scan Request model."""
+
     filters: dict | None = None
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def _render(request: Request) -> HTMLResponse:
+    """Helper function to render template."""
     last_scanned: datetime | None = getattr(request.app.state, "last_scanned", None)
     return request.app.state.templates.TemplateResponse(
         "dashboard.html",
@@ -35,14 +34,17 @@ def _render(request: Request) -> HTMLResponse:
     )
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-
 def dashboard(request: Request) -> HTMLResponse:
+    """Returns the dashboard page."""
     return _render(request)
 
 
 async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
-    """Start a background stock scan. Returns immediately with 202."""
+    """Start the scan process with optional filters.
+
+    If a scan is already running, return a 202 status with an appropriate message.
+    Otherwise, update the app state with the new filters and start the scan in a background task.
+    """
     if getattr(request.app.state, "scan_status", "idle") == "running":
         return JSONResponse({"status": "already_running"}, status_code=202)
 
@@ -52,12 +54,11 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
     request.app.state.scan_error = None
 
     async def _run_scan() -> None:
+        """Run the scan process."""
         try:
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=1) as pool:
-                data = await loop.run_in_executor(
-                    pool, lambda: builder(to_dict=True, filters=filters)
-                )
+                data = await loop.run_in_executor(pool, lambda: builder(to_dict=True, filters=filters))
             request.app.state.scan_data = data
             request.app.state.last_scanned = datetime.now()
             request.app.state.scan_status = "done"
@@ -72,16 +73,20 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
 
 
 def scan_status(request: Request) -> JSONResponse:
+    """Get the current scan status, error (if any), count of results, and last scanned timestamp."""
     last: datetime | None = getattr(request.app.state, "last_scanned", None)
-    return JSONResponse({
-        "status": getattr(request.app.state, "scan_status", "idle"),
-        "error": getattr(request.app.state, "scan_error", None),
-        "count": len(getattr(request.app.state, "scan_data", [])),
-        "timestamp": last.strftime("%b %d, %Y  %I:%M:%S %p") if last else None,
-    })
+    return JSONResponse(
+        {
+            "status": getattr(request.app.state, "scan_status", "idle"),
+            "error": getattr(request.app.state, "scan_error", None),
+            "count": len(getattr(request.app.state, "scan_data", [])),
+            "timestamp": last.strftime("%b %d, %Y  %I:%M:%S %p") if last else None,
+        }
+    )
 
 
 def get_logs() -> JSONResponse:
+    """Get logs page."""
     log_dir = Path(__file__).parent.parent / "logs"
     files = sorted(log_dir.glob("trading_bot_*.log"), reverse=True) if log_dir.exists() else []
     if not files:
@@ -90,10 +95,12 @@ def get_logs() -> JSONResponse:
     try:
         lines = latest.read_text(errors="replace").splitlines()
         # Return last 500 lines to keep the response size manageable
-        return JSONResponse({
-            "content": "\n".join(lines[-500:]),
-            "filename": latest.name,
-            "total_lines": len(lines),
-        })
+        return JSONResponse(
+            {
+                "content": "\n".join(lines[-500:]),
+                "filename": latest.name,
+                "total_lines": len(lines),
+            }
+        )
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"content": f"Error reading log: {exc}", "filename": latest.name, "total_lines": 0})
