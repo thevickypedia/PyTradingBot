@@ -1,0 +1,42 @@
+[project]
+name = "PyTradingBot"
+dynamic = ["version"]
+description = "Python module to get kernel information via OS specific CLI commands"
+readme = "README.md"
+authors = [{ name = "Vignesh Rao", email = "svignesh1793@gmail.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 5 - Production/Stable",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+keywords = ["trading", "PyTradingBot"]
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = [
+    "pytradingbot",
+    "pytradingbot.templates",
+]
+[tool.setuptools.package-data]
+"pytradingbot.templates" = ["*.html"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pytradingbot.version"}
+
+[project.optional-dependencies]
+dev = ["pre-commit"]
+
+[project.scripts]
+# sends all the args to commandline function, where the arbitary commands as processed accordingly
+pytradingbot = "pytradingbot:commandline"
+
+[build-system]
+requires      = ["setuptools>=82", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/thevickypedia/PyTradingBot"
+Source = "https://github.com/thevickypedia/PyTradingBot"
