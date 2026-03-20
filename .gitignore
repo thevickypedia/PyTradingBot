@@ -212,3 +212,4 @@ __marimo__/
 !dashboard.html
 *.xlsx
 *.csv
+*.db

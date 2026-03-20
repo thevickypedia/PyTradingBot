@@ -1,15 +1,15 @@
 import logging
 import os
+import pathlib
 import socket
-
-import pandas as pd
+from datetime import datetime
 
 os.makedirs("logs", exist_ok=True)
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 handler = logging.FileHandler(
-    filename=os.path.join("logs", f"trading_bot_{pd.Timestamp.now().strftime('%Y-%m-%d')}.log"),
+    filename=os.path.join("logs", f"trading_bot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
 handler.setFormatter(
@@ -39,6 +39,15 @@ TWELVEDATA_API_KEY = (
     or "demo"
 )
 
+# API Starter pack
 HOST = os.getenv("HOST") or os.getenv("host") or socket.gethostbyname("localhost") or "0.0.0.0"
-
 PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")
+
+TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
+
+# Users may not trigger a new scan within this window after the last one completed.
+SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv("scan_cooldown_seconds") or 60)
+
+# Datastore
+DB_DIR = pathlib.Path(__file__).parent.parent / "data"
+DB_PATH = str(DB_DIR / "scan_history")

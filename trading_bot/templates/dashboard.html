@@ -129,6 +129,34 @@
     .badge-running { background: #2d2005;  color: var(--yellow); border: 1px solid #bb8009; }
     .badge-done    { background: #163b25;  color: var(--green);  border: 1px solid #2ea043; }
     .badge-error   { background: #3d1216;  color: var(--red);    border: 1px solid #da3633; }
+
+    /* ── Version selector ───────────────────────────────── */
+    .version-wrap { display: flex; align-items: center; gap: 6px; }
+    .version-label { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+    #versionSelect {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 3px 26px 3px 9px;
+      font-size: .78rem;
+      max-width: 270px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+    }
+    #versionSelect:focus { outline: none; border-color: var(--blue); }
+    #versionSelect option { background: var(--card); }
+
+    /* ── Cooldown pill ──────────────────────────────────── */
+    .cooldown-pill {
+      display: inline-block; padding: 2px 10px; border-radius: 20px;
+      font-size: .72rem; font-weight: 700;
+      background: #2d2005; color: var(--yellow); border: 1px solid #bb8009;
+    }
   </style>
 </head>
 
@@ -137,6 +165,15 @@
 <!-- ══════════════════════  NAVBAR  ══════════════════════════ -->
 <nav class="navbar navbar-expand-sm navbar-dark">
   <a class="navbar-brand" href="/">📈 Trading Bot</a>
+
+  <!-- Version selector -->
+  <div class="version-wrap ml-3">
+    <span class="version-label">📅 Version:</span>
+    <select id="versionSelect" onchange="switchVersion(this.value)" title="Switch to a previous scan snapshot">
+      <option value="">— no scans yet —</option>
+    </select>
+  </div>
+
   <div class="ml-auto d-flex align-items-center">
     <span id="statusBadge" class="badge-idle mr-3">⏸ Idle</span>
     <span class="navbar-text mr-3" id="navTimestamp">
@@ -420,7 +457,20 @@
                 {% elif scan_status == 'running' %}⏳ Scan in progress…
                 {% else %}No scan yet{% endif %}
               </small>
-              <button class="btn btn-primary px-4" id="runScanBtn" onclick="startScan()">▶ Run Scan</button>
+              <div class="d-flex align-items-center gap-2">
+                {% if cooldown_remaining > 0 %}
+                <span class="cooldown-pill" id="cooldownPill">⏱ {{ cooldown_remaining }}s cooldown</span>
+                {% else %}
+                <span class="cooldown-pill d-none" id="cooldownPill"></span>
+                {% endif %}
+                <button class="btn btn-primary px-4" id="runScanBtn"
+                        onclick="startScan()"
+                        {% if cooldown_remaining > 0 or scan_status == 'running' %}disabled{% endif %}>
+                  {% if cooldown_remaining > 0 %}⏱ {{ cooldown_remaining }}s
+                  {% elif scan_status == 'running' %}⏳ Scanning…
+                  {% else %}▶ Run Scan{% endif %}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -458,20 +508,26 @@
 
 <script>
 /* ── Constants injected by server ─────────────────────── */
-const INITIAL_STATUS  = {{ scan_status | tojson }};
-const DEFAULT_FILTERS = {{ default_filters | tojson }};
+const INITIAL_STATUS           = {{ scan_status | tojson }};
+const DEFAULT_FILTERS          = {{ default_filters | tojson }};
+const CURRENT_VERSION          = {{ current_version | tojson }};
+const COOLDOWN_SECONDS         = {{ cooldown_seconds }};
+const INITIAL_COOLDOWN_REMAINING = {{ cooldown_remaining }};
 
 /* ── State ────────────────────────────────────────────── */
 let pollId          = null;
 let elapsedId       = null;
 let elapsedStart    = null;
 let logAutoId       = null;
+let cooldownId      = null;
+let cooldownLeft    = INITIAL_COOLDOWN_REMAINING;
 
 /* ── Init ─────────────────────────────────────────────── */
 $(function () {
   updateStatusBadge(INITIAL_STATUS);
+  loadVersions();
 
-  // If scan is already running when page loads → start polling immediately
+  // Resume polling if a scan was running when page loaded
   if (INITIAL_STATUS === 'running') {
     elapsedStart = Date.now();
     startElapsedTimer();
@@ -483,15 +539,15 @@ $(function () {
     initDataTable();
   }
 
-  // Disable Run Scan button when scan is running
-  if (INITIAL_STATUS === 'running') {
-    setRunBtnState(true);
+  // Kick off cooldown countdown if server says we're still in it
+  if (cooldownLeft > 0) {
+    initCooldown(cooldownLeft);
   }
 
-  // Load logs when that tab is opened
+  // Load logs when tab opens
   $('#tab-logs-link').on('shown.bs.tab', function () { loadLogs(); });
 
-  // Auto-refresh logs toggle
+  // Auto-refresh logs
   $('#autoRefreshLog').on('change', function () {
     if (this.checked) { logAutoId = setInterval(loadLogs, 5000); }
     else              { clearInterval(logAutoId); logAutoId = null; }
@@ -500,6 +556,73 @@ $(function () {
 
 /* ── Tab helpers ──────────────────────────────────────── */
 function switchToControls () { $('#tab-controls-link').tab('show'); }
+
+/* ── Version selector ─────────────────────────────────── */
+function loadVersions () {
+  fetch('/versions')
+    .then(r => r.json())
+    .then(versions => {
+      const sel = document.getElementById('versionSelect');
+      if (!versions || versions.length === 0) {
+        sel.innerHTML = '<option value="">— no scans yet —</option>';
+        return;
+      }
+      sel.innerHTML = '';
+      versions.forEach((v, i) => {
+        const opt  = document.createElement('option');
+        opt.value  = v.timestamp;
+        opt.textContent = `${v.timestamp}  (${v.count} stocks)`;
+        // Highlight the version currently being viewed; fall back to newest (i===0)
+        if (v.timestamp === CURRENT_VERSION || (!CURRENT_VERSION && i === 0)) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      document.getElementById('versionSelect').innerHTML =
+        '<option value="">Failed to load versions</option>';
+    });
+}
+
+function switchVersion (ts) {
+  if (ts) window.location.href = '/?version=' + encodeURIComponent(ts);
+}
+
+/* ── Cooldown ─────────────────────────────────────────── */
+function initCooldown (secs) {
+  cooldownLeft = secs;
+  _applyCooldownUI(cooldownLeft);
+  if (cooldownId) return;                    // already ticking
+  cooldownId = setInterval(() => {
+    cooldownLeft -= 1;
+    if (cooldownLeft <= 0) {
+      clearInterval(cooldownId);
+      cooldownId = null;
+      _clearCooldownUI();
+    } else {
+      _applyCooldownUI(cooldownLeft);
+    }
+  }, 1000);
+}
+
+function _applyCooldownUI (secs) {
+  const btn  = document.getElementById('runScanBtn');
+  const pill = document.getElementById('cooldownPill');
+  const cs   = document.getElementById('controlStatus');
+  if (btn)  { btn.disabled = true;  btn.innerHTML = `⏱ ${secs}s`; }
+  if (pill) { pill.textContent = `⏱ ${secs}s cooldown`; pill.classList.remove('d-none'); }
+  if (cs)   cs.textContent = `Next scan available in ${secs}s`;
+}
+
+function _clearCooldownUI () {
+  const btn  = document.getElementById('runScanBtn');
+  const pill = document.getElementById('cooldownPill');
+  const cs   = document.getElementById('controlStatus');
+  if (btn)  { btn.disabled = false; btn.innerHTML = '▶ Run Scan'; }
+  if (pill) { pill.classList.add('d-none'); }
+  if (cs)   cs.textContent = 'Ready to scan';
+}
 
 /* ── Scan trigger ─────────────────────────────────────── */
 function startScan () {
@@ -513,17 +636,24 @@ function startScan () {
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ filters }),
   })
-  .then(r => r.json())
-  .then(d => {
-    if (d.status === 'started' || d.status === 'already_running') {
-      // Switch to dashboard and show spinner
-      $('#tab-dashboard-link').tab('show');
-      showRunningState();
-      updateStatusBadge('running');
-      elapsedStart = Date.now();
-      startElapsedTimer();
-      startPolling();
+  .then(r => {
+    if (r.status === 429) {
+      // Server enforced cooldown — sync the countdown with the server's value
+      return r.json().then(d => {
+        setRunBtnState(false);
+        initCooldown(d.remaining_seconds || COOLDOWN_SECONDS);
+      });
     }
+    return r.json().then(d => {
+      if (d.status === 'started' || d.status === 'already_running') {
+        $('#tab-dashboard-link').tab('show');
+        showRunningState();
+        updateStatusBadge('running');
+        elapsedStart = Date.now();
+        startElapsedTimer();
+        startPolling();
+      }
+    });
   })
   .catch(err => {
     setRunBtnState(false);
@@ -532,20 +662,26 @@ function startScan () {
 }
 
 function triggerRescan () {
-  // Rescan with current stored filters (no filter editing needed)
   setRunBtnState(true);
   fetch('/scan', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ filters: null }),   // server uses current_filters
+    body:    JSON.stringify({ filters: null }),
   })
-  .then(r => r.json())
-  .then(() => {
-    showRunningState();
-    updateStatusBadge('running');
-    elapsedStart = Date.now();
-    startElapsedTimer();
-    startPolling();
+  .then(r => {
+    if (r.status === 429) {
+      return r.json().then(d => {
+        setRunBtnState(false);
+        initCooldown(d.remaining_seconds || COOLDOWN_SECONDS);
+      });
+    }
+    return r.json().then(() => {
+      showRunningState();
+      updateStatusBadge('running');
+      elapsedStart = Date.now();
+      startElapsedTimer();
+      startPolling();
+    });
   })
   .catch(err => { setRunBtnState(false); alert('Rescan failed: ' + err); });
 }
@@ -572,10 +708,15 @@ function pollStatus () {
     .then(r => r.json())
     .then(d => {
       updateStatusBadge(d.status);
+      // Sync cooldown from server during polling
+      if (d.cooldown_remaining > 0 && !cooldownId) {
+        initCooldown(d.cooldown_remaining);
+      }
       if (d.status === 'done' || d.status === 'error') {
         clearInterval(pollId);    pollId = null;
         clearInterval(elapsedId); elapsedId = null;
-        location.reload();
+        // Navigate to / so the latest version is always shown after a scan
+        window.location.href = '/';
       }
     })
     .catch(() => {});
