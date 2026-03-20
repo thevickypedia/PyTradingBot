@@ -47,14 +47,6 @@ DEFAULT_FILTERS = {
     "RSI (14)": "Not Overbought (<60)",
 }
 
-TWELVEDATA_API_KEY = (
-    os.getenv("TWELVEDATA_API_KEY")
-    or os.getenv("TWELVEDATA_APIKEY")
-    or os.getenv("twelvedata_api_key")
-    or os.getenv("twelvedata_apikey")
-    or "demo"
-)
-
 # API Starter pack
 HOST = os.getenv("HOST") or os.getenv("host") or socket.gethostbyname("localhost") or "0.0.0.0"
 PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")

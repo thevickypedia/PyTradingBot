@@ -122,5 +122,4 @@ else:
 #   Add CORS protection
 #   Add notifications through Telegram and Gmail
 #   Extend Telegram support to score an individual ticker
-#   Consider replacing Twelve Data with an open-source alternative
 #   Include multiple candlestick trackers
