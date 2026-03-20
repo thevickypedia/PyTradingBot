@@ -9,7 +9,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from trading_bot import storage
-from trading_bot.constants import DEFAULT_FILTERS, LOGGER, SCAN_COOLDOWN_SECONDS
+from trading_bot.constants import (
+    DEFAULT_FILTERS,
+    LOGGER,
+    SCAN_COOLDOWN_SECONDS,
+    ScanStatus,
+)
 from trading_bot.main import builder
 
 
@@ -60,7 +65,7 @@ def _render(
             "request": request,
             "stocks": displayed_stocks,
             "timestamp": displayed_timestamp,
-            "scan_status": getattr(request.app.state, "scan_status", "idle"),
+            "scan_status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
             "scan_error": getattr(request.app.state, "scan_error", None),
             "filters": getattr(request.app.state, "current_filters", dict(DEFAULT_FILTERS)),
             "default_filters": dict(DEFAULT_FILTERS),
@@ -94,12 +99,12 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
             status_code=429,
         )
 
-    if getattr(request.app.state, "scan_status", "idle") == "running":
+    if getattr(request.app.state, "scan_status", ScanStatus.IDLE) == ScanStatus.RUNNING:
         return JSONResponse({"status": "already_running"}, status_code=202)
 
     filters = body.filters if body.filters else dict(request.app.state.current_filters)
     request.app.state.current_filters = filters
-    request.app.state.scan_status = "running"
+    request.app.state.scan_status = ScanStatus.RUNNING
     request.app.state.scan_error = None
 
     async def _run_scan() -> None:
@@ -115,10 +120,10 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
             request.app.state.scan_data = data
             request.app.state.last_scan_ts = ts
             request.app.state.last_scan_completed = datetime.now()
-            request.app.state.scan_status = "done"
+            request.app.state.scan_status = ScanStatus.DONE
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Scan failed with filters %s: %s", filters, exc)
-            request.app.state.scan_status = "error"
+            request.app.state.scan_status = ScanStatus.ERROR
             request.app.state.scan_error = str(exc)[:300]
 
     asyncio.create_task(_run_scan())
@@ -129,7 +134,7 @@ def scan_status(request: Request) -> JSONResponse:
     """Poll endpoint: returns current status, result count, timestamp, and cooldown."""
     return JSONResponse(
         {
-            "status": getattr(request.app.state, "scan_status", "idle"),
+            "status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
             "error": getattr(request.app.state, "scan_error", None),
             "count": len(getattr(request.app.state, "scan_data", [])),
             "timestamp": getattr(request.app.state, "last_scan_ts", None),

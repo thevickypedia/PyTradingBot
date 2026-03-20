@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
 from trading_bot import storage
-from trading_bot.constants import DEFAULT_FILTERS, TEMPLATES_DIR, LOGGER
+from trading_bot.constants import DEFAULT_FILTERS, LOGGER, TEMPLATES_DIR, ScanStatus
 from trading_bot.routes import (
     dashboard,
     get_logs,
@@ -31,8 +31,7 @@ async def lifespan(app_: FastAPI):
     latest_ts, latest_data = storage.latest_version()
     app_.state.scan_data = latest_data
     app_.state.last_scan_ts = latest_ts
-    # idle | running | done | error
-    app_.state.scan_status = "done" if latest_data else "idle"
+    app_.state.scan_status = ScanStatus.DONE if latest_data else ScanStatus.IDLE
     app_.state.scan_error = None
     app_.state.last_scan_completed = None  # no cooldown on cold start
     app_.state.current_filters = dict(DEFAULT_FILTERS)

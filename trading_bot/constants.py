@@ -3,6 +3,22 @@ import os
 import pathlib
 import socket
 from datetime import datetime
+from enum import StrEnum
+
+
+class ScanStatus(StrEnum):
+    """Lifecycle states for a stock scan.
+
+    Inherits from ``str`` so values compare equal to plain string literals —
+    Jinja2 ``{% if scan_status == 'done' %}`` and JS ``=== 'done'`` both work
+    without any template changes.
+    """
+
+    IDLE = "idle"
+    RUNNING = "running"
+    DONE = "done"
+    ERROR = "error"
+
 
 os.makedirs("logs", exist_ok=True)
 
