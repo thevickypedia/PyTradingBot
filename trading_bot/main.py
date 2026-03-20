@@ -2,7 +2,6 @@ import math
 from typing import Any, Dict, List
 
 import pandas as pd
-import requests
 import yfinance as yf
 from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
@@ -30,13 +29,12 @@ def enrich_ticker(ticker: str) -> pd.Series:
 def get_candle_signal(ticker: str) -> pd.Series:
     """Uses yfinance 5min candles for full signal analysis."""
     try:
-        df = yf.download(ticker, period='1d', interval='5m', progress=False)
+        df = yf.download(ticker, period="1d", interval="5m", progress=False)
 
         if df.empty:
-            return pd.Series({
-                'TD_Signal': 'No data', 'TD_Trend': 'Unknown',
-                'YF_Signal': 'No data', 'EMA_Cross': 'Unknown'
-            })
+            return pd.Series(
+                {"TD_Signal": "No data", "TD_Trend": "Unknown", "YF_Signal": "No data", "EMA_Cross": "Unknown"}
+            )
 
         # Flatten multi-level columns if present
         if isinstance(df.columns, pd.MultiIndex):
@@ -44,43 +42,43 @@ def get_candle_signal(ticker: str) -> pd.Series:
 
         # ---- Candle Direction Analysis ----
         last_5 = df.tail(5).copy()
-        last_5['bullish'] = last_5['Close'] > last_5['Open']
-        bullish_count = last_5['bullish'].sum()
+        last_5["bullish"] = last_5["Close"] > last_5["Open"]
+        bullish_count = last_5["bullish"].sum()
 
         last_candle = last_5.iloc[-1]
         prev_candle = last_5.iloc[-2]
 
-        higher_high = last_candle['High'].item() > prev_candle['High'].item()
-        higher_low = last_candle['Low'].item() > prev_candle['Low'].item()
+        higher_high = last_candle["High"].item() > prev_candle["High"].item()
+        higher_low = last_candle["Low"].item() > prev_candle["Low"].item()
 
         if bullish_count >= 4 and higher_high and higher_low:
-            td_signal = 'STRONG BUY'
+            td_signal = "STRONG BUY"
         elif bullish_count >= 3 and higher_high:
-            td_signal = 'BUY'
+            td_signal = "BUY"
         elif bullish_count <= 1:
-            td_signal = 'SELL'
+            td_signal = "SELL"
         elif bullish_count == 2:
-            td_signal = 'WEAK - WAIT'
+            td_signal = "WEAK - WAIT"
         else:
-            td_signal = 'NEUTRAL'
+            td_signal = "NEUTRAL"
 
         if higher_high and higher_low:
-            td_trend = 'UPTREND'
+            td_trend = "UPTREND"
         elif not higher_high and not higher_low:
-            td_trend = 'DOWNTREND'
+            td_trend = "DOWNTREND"
         else:
-            td_trend = 'SIDEWAYS'
+            td_trend = "SIDEWAYS"
 
         # ---- EMA Crossover Analysis ----
-        df['EMA9'] = df['Close'].ewm(span=9).mean()
-        df['EMA21'] = df['Close'].ewm(span=21).mean()
+        df["EMA9"] = df["Close"].ewm(span=9).mean()
+        df["EMA21"] = df["Close"].ewm(span=21).mean()
 
-        last_ema9 = df['EMA9'].iloc[-1].item()
-        last_ema21 = df['EMA21'].iloc[-1].item()
-        prev_ema9 = df['EMA9'].iloc[-2].item()
-        prev_ema21 = df['EMA21'].iloc[-2].item()
-        last_volume = df['Volume'].iloc[-1].item()
-        avg_volume = df['Volume'].mean().item()
+        last_ema9 = df["EMA9"].iloc[-1].item()
+        last_ema21 = df["EMA21"].iloc[-1].item()
+        prev_ema9 = df["EMA9"].iloc[-2].item()
+        prev_ema21 = df["EMA21"].iloc[-2].item()
+        last_volume = df["Volume"].iloc[-1].item()
+        avg_volume = df["Volume"].mean().item()
 
         ema_cross_up = prev_ema9 < prev_ema21 and last_ema9 > last_ema21
         ema_cross_down = prev_ema9 > prev_ema21 and last_ema9 < last_ema21
@@ -88,29 +86,23 @@ def get_candle_signal(ticker: str) -> pd.Series:
         volume_spike = last_volume > avg_volume * 1.5
 
         if ema_cross_up and volume_spike:
-            yf_signal = 'STRONG BUY'
+            yf_signal = "STRONG BUY"
         elif ema_above and volume_spike:
-            yf_signal = 'BUY'
+            yf_signal = "BUY"
         elif ema_cross_down:
-            yf_signal = 'SELL'
+            yf_signal = "SELL"
         elif not ema_above:
-            yf_signal = 'WEAK - WAIT'
+            yf_signal = "WEAK - WAIT"
         else:
-            yf_signal = 'NEUTRAL'
+            yf_signal = "NEUTRAL"
 
-        ema_cross = 'CROSS UP' if ema_cross_up else 'CROSS DOWN' if ema_cross_down else 'NO CROSS'
+        ema_cross = "CROSS UP" if ema_cross_up else "CROSS DOWN" if ema_cross_down else "NO CROSS"
 
-        return pd.Series({
-            'TD_Signal': td_signal, 'TD_Trend': td_trend,
-            'YF_Signal': yf_signal, 'EMA_Cross': ema_cross
-        })
+        return pd.Series({"TD_Signal": td_signal, "TD_Trend": td_trend, "YF_Signal": yf_signal, "EMA_Cross": ema_cross})
 
     except Exception as e:
         LOGGER.error(f"Error fetching candle data for {ticker} : {e}")
-        return pd.Series({
-            'TD_Signal': 'Error', 'TD_Trend': 'Error',
-            'YF_Signal': 'Error', 'EMA_Cross': 'Error'
-        })
+        return pd.Series({"TD_Signal": "Error", "TD_Trend": "Error", "YF_Signal": "Error", "EMA_Cross": "Error"})
 
 
 def score_stock(row: pd.Series) -> int:
@@ -228,7 +220,7 @@ def builder(
     final_df = pd.concat([final_df, enriched], axis=1)
 
     # Candle signals
-    signals = final_df['Ticker'].apply(get_candle_signal)
+    signals = final_df["Ticker"].apply(get_candle_signal)
     final_df = pd.concat([final_df, signals], axis=1)
 
     # Numeric conversions
