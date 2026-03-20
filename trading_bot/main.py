@@ -1,6 +1,4 @@
-import logging
 import math
-import os
 from typing import List, Dict, Any
 
 import pandas as pd
@@ -10,38 +8,7 @@ from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
-os.makedirs("logs", exist_ok=True)
-
-LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.INFO)
-handler = logging.FileHandler(
-    filename=os.path.join("logs", f"trading_bot_{pd.Timestamp.now().strftime('%Y-%m-%d')}.log"),
-    mode='a',
-)
-handler.setFormatter(
-    fmt=logging.Formatter(
-        datefmt="%b-%d-%Y %I:%M:%S %p",
-        fmt="%(asctime)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
-    )
-)
-LOGGER.addHandler(hdlr=handler)
-
-TWELVEDATA_API_KEY = (
-        os.environ.get("TWELVEDATA_API_KEY") or os.environ.get("TWELVEDATA_APIKEY") or
-        os.environ.get("twelvedata_api_key") or os.environ.get("twelvedata_apikey") or
-        "demo"
-)
-
-DEFAULT_FILTERS = {
-    'Exchange': 'NASDAQ',
-    'Country': 'USA',
-    'Average Volume': 'Over 500K',
-    'Price': 'Under $50',
-    'Relative Volume': 'Over 2',
-    'Gap': 'Up',
-    'Change': 'Up 5%',
-    'RSI (14)': 'Not Overbought (<60)',
-}
+from trading_bot.constants import TWELVEDATA_API_KEY, LOGGER, DEFAULT_FILTERS
 
 
 def enrich_ticker(ticker):

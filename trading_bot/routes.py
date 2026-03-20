@@ -3,13 +3,12 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from .main import builder, DEFAULT_FILTERS, LOGGER
-
-router = APIRouter()
+from trading_bot.constants import DEFAULT_FILTERS, LOGGER
+from trading_bot.main import builder
 
 
 # ── Request schemas ──────────────────────────────────────────────────────────
@@ -38,12 +37,10 @@ def _render(request: Request) -> HTMLResponse:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     return _render(request)
 
 
-@router.post("/scan")
 async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
     """Start a background stock scan. Returns immediately with 202."""
     if getattr(request.app.state, "scan_status", "idle") == "running":
@@ -74,7 +71,6 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
     return JSONResponse({"status": "started"}, status_code=202)
 
 
-@router.get("/scan/status")
 def scan_status(request: Request) -> JSONResponse:
     last: datetime | None = getattr(request.app.state, "last_scanned", None)
     return JSONResponse({
@@ -85,7 +81,6 @@ def scan_status(request: Request) -> JSONResponse:
     })
 
 
-@router.get("/logs")
 def get_logs() -> JSONResponse:
     log_dir = Path(__file__).parent.parent / "logs"
     files = sorted(log_dir.glob("trading_bot_*.log"), reverse=True) if log_dir.exists() else []

@@ -4,14 +4,22 @@ Entry point – run with:
 or:
     uvicorn trading_bot.server:app
 """
+import pathlib
+
 import uvicorn
 
-# Re-export `app` so `uvicorn trading_bot.server:app` resolves correctly.
-from .api import app  # noqa: F401
+from trading_bot.api import app
+from trading_bot.constants import HOST, PORT
 
 
-def start(host: str = "0.0.0.0", port: int = 8000) -> None:
-    uvicorn.run("trading_bot.server:app", host=host, port=port, reload=False)
+def start() -> None:
+    module_name = pathlib.Path(__file__)
+    uvicorn_args = dict(
+        host=HOST,
+        port=PORT,
+        app=f"{module_name.parent.stem}.{module_name.stem}:{app.__name__}",
+    )
+    uvicorn.run(**uvicorn_args)
 
 
 if __name__ == "__main__":
