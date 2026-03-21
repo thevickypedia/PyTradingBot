@@ -1,5 +1,7 @@
+import asyncio
 import warnings
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from typing import List
 
 import uiauth
@@ -11,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from pytradingbot import storage
 from pytradingbot.constants import (
     DEFAULT_FILTERS,
+    DEFAULT_SCHEDULE,
     LOGGER,
     PASSWORD,
     TEMPLATES_DIR,
@@ -20,10 +23,14 @@ from pytradingbot.constants import (
 from pytradingbot.routes import (
     dashboard,
     get_logs,
+    get_schedule,
     get_versions,
+    run_scan_job,
     scan_status,
     start_scan,
+    update_schedule,
 )
+from pytradingbot.scheduler import ScanScheduler
 
 
 @asynccontextmanager
@@ -43,12 +50,20 @@ async def lifespan(app_: FastAPI):
     app_.state.scan_error = None
     app_.state.last_scan_completed = None  # no cooldown on cold start
     app_.state.current_filters = dict(DEFAULT_FILTERS)
+    app_.state.scan_lock = asyncio.Lock()
+    app_.state.scan_source = "manual"
+    app_.state.last_scheduler_minute = None
+    app_.state.schedule_config = storage.load_schedule() or deepcopy(DEFAULT_SCHEDULE)
+
+    app_.state.scheduler = ScanScheduler(app_, trigger_scan=run_scan_job)
+    app_.state.scheduler.start()
 
     LOGGER.info("Loaded latest scan from %s with %d stocks.", latest_ts, len(latest_data))
     LOGGER.info("Server started.")
 
     yield  # Server is running
 
+    await app_.state.scheduler.stop()
     LOGGER.info("Server stopped.")
 
 
@@ -93,6 +108,20 @@ def get_routes() -> List[APIRoute]:
             path="/logs",
             endpoint=get_logs,
             methods=["GET"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/schedule",
+            endpoint=get_schedule,
+            methods=["GET"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/schedule",
+            endpoint=update_schedule,
+            methods=["POST"],
             include_in_schema=False,
             response_class=JSONResponse,
         ),

@@ -3,6 +3,7 @@ import os
 import pathlib
 from datetime import datetime
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 
 class ScanStatus(StrEnum):
@@ -57,8 +58,51 @@ TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv("scan_cooldown_seconds") or 60)
 
 # Datastore
-DB_DIR = pathlib.Path(__file__).parent.parent / "data"
+DB_DIR = pathlib.Path("data")
 DB_PATH = str(DB_DIR / "scan_history")
+DB_INDEX_KEY = "__index__"
+DB_SCHEDULE_KEY = "__schedule__"
+
+# Scheduler defaults (all times are interpreted in America/New_York)
+MARKET_TIMEZONE = ZoneInfo("America/New_York")
+DEFAULT_SCHEDULE = {
+    "enabled": True,
+    "windows": [
+        {
+            "id": "pre_market",
+            "label": "Pre-Market",
+            "start": "04:00",
+            "end": "09:30",
+            "interval_minutes": 15,
+            "enabled": True,
+        },
+        {
+            "id": "market_open",
+            "label": "Market Open",
+            "start": "09:30",
+            "end": "10:30",
+            "interval_minutes": 5,
+            "enabled": True,
+        },
+        {
+            "id": "mid_day",
+            "label": "Mid Day",
+            "start": "10:30",
+            "end": "14:00",
+            "interval_minutes": 30,
+            "enabled": True,
+        },
+        {
+            "id": "power_hour",
+            "label": "Power Hour",
+            "start": "14:00",
+            "end": "16:00",
+            "interval_minutes": 5,
+            "enabled": True,
+        },
+    ],
+    "after_hours": {"enabled": True, "run_time": "16:15", "close": "20:00"},
+}
 
 # Credentials
 USERNAME = os.getenv("USERNAME") or os.getenv("username") or os.getenv("USER") or os.getenv("user")

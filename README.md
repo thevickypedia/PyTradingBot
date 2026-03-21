@@ -25,10 +25,10 @@ pip install PyTradingBot
 
 **Initiate - IDE**
 ```python
-import pytradingbot
+from pytradingbot.server import start
 
 if __name__ == '__main__':
-    pytradingbot.start()
+    start()
 ```
 
 **Initiate - CLI**
@@ -37,6 +37,23 @@ pytradingbot start
 ```
 
 > Use `pytradingbot --help` for usage instructions.
+
+### Background Scheduler
+
+The API runs a background async scheduler that triggers scans automatically (EST) and stores each run in the existing shelve DB.
+
+#### Default schedule:
+
+- Pre-Market (04:00-09:30): every 15 minutes
+- Market Open (09:30-10:30): every 5 minutes
+- Mid Day (10:30-14:00): every 30 minutes
+- Power Hour (14:00-16:00): every 5 minutes
+- After Hours (16:00-20:00): once at 16:15
+
+You can override these rules from the Dashboard `Schedule` tab, or through:
+
+- `GET /schedule` to read current/default config
+- `POST /schedule` to save overrides
 
 ## Containerized
 

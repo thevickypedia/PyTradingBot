@@ -131,6 +131,15 @@
     .btn-outline-secondary { border-color: var(--border); color: var(--muted); font-size: .8rem; }
     .btn-outline-secondary:hover { border-color: var(--muted); color: var(--text); background: transparent; }
 
+    /* Scheduler settings */
+    .schedule-grid { display: grid; grid-template-columns: 1.2fr .9fr .9fr .9fr .8fr; gap: 10px; align-items: center; }
+    .schedule-grid-header { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .schedule-grid .form-control,
+    .schedule-grid .custom-select { background: var(--surface); border-color: var(--border); color: var(--text); font-size: .82rem; }
+    .schedule-grid .form-control:focus,
+    .schedule-grid .custom-select:focus { border-color: var(--blue); box-shadow: none; }
+    .schedule-note { color: var(--muted); font-size: .78rem; }
+
     /* Status badge in navbar */
     #statusBadge { font-size: .72rem; padding: 4px 10px; border-radius: 20px; font-weight: 700; letter-spacing: .04em; }
     .badge-idle    { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
@@ -203,6 +212,9 @@
     </li>
     <li class="nav-item">
       <a class="nav-link" id="tab-controls-link" data-toggle="tab" href="#tab-controls" role="tab">⚙️ Controls</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tab-schedule-link" data-toggle="tab" href="#tab-schedule" role="tab">🗓 Schedule</a>
     </li>
     <li class="nav-item">
       <a class="nav-link" id="tab-logs-link" data-toggle="tab" href="#tab-logs" role="tab">📋 Logs</a>
@@ -486,6 +498,55 @@
     </div>{# /tab-controls #}
 
 
+    <!-- ═══════════════  SCHEDULE TAB  ═══════════════════ -->
+    <div class="tab-pane fade" id="tab-schedule" role="tabpanel">
+      <div class="row">
+        <div class="col-xl-9 col-lg-11">
+          <div class="ctrl-card">
+            <div class="ctrl-card-header">
+              <span>Background Scan Schedule (EST)</span>
+              <div>
+                <button class="btn-ghost mr-2" onclick="loadSchedule()">↺ Reload</button>
+                <button class="btn-ghost" onclick="restoreScheduleDefaults()">Restore Defaults</button>
+              </div>
+            </div>
+            <div class="ctrl-card-body">
+              <p class="schedule-note">Scheduler checks every minute bucket and runs scans in the background based on this schedule.</p>
+
+              <div class="custom-control custom-switch mb-3">
+                <input type="checkbox" class="custom-control-input" id="scheduleEnabled">
+                <label class="custom-control-label" for="scheduleEnabled">Enable scheduler</label>
+              </div>
+
+              <div class="schedule-grid schedule-grid-header">
+                <div>Session</div><div>Start</div><div>End</div><div>Interval (min)</div><div>Enabled</div>
+              </div>
+
+              <div id="scheduleWindows"></div>
+
+              <hr style="border-color:var(--border);">
+              <h6 style="font-size:.84rem;">After Hours</h6>
+              <div class="schedule-grid">
+                <div>Run once daily</div>
+                <input id="afterRunTime" type="time" class="form-control form-control-sm" value="16:15">
+                <input id="afterCloseTime" type="time" class="form-control form-control-sm" value="20:00">
+                <div class="schedule-note">Valid only when run time is before close.</div>
+                <div class="custom-control custom-switch">
+                  <input type="checkbox" class="custom-control-input" id="afterEnabled">
+                  <label class="custom-control-label" for="afterEnabled"></label>
+                </div>
+              </div>
+            </div>
+            <div class="ctrl-card-footer">
+              <small class="text-muted" id="scheduleStatus">No schedule changes yet.</small>
+              <button class="btn btn-primary px-4" onclick="saveSchedule()">Save Schedule</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>{# /tab-schedule #}
+
+
     <!-- ═══════════════  LOGS TAB  ══════════════════════= -->
     <div class="tab-pane fade" id="tab-logs" role="tabpanel">
       <div class="log-toolbar">
@@ -518,6 +579,8 @@
 /* ── Constants injected by server ─────────────────────── */
 const INITIAL_STATUS           = {{ scan_status | tojson }};
 const DEFAULT_FILTERS          = {{ default_filters | tojson }};
+const INITIAL_SCHEDULE         = {{ schedule | tojson }};
+const DEFAULT_SCHEDULE_CONFIG  = {{ default_schedule | tojson }};
 const CURRENT_VERSION          = {{ current_version | tojson }};
 const COOLDOWN_SECONDS         = {{ cooldown_seconds }};
 const INITIAL_COOLDOWN_REMAINING = {{ cooldown_remaining }};
@@ -554,6 +617,9 @@ $(function () {
 
   // Load logs when tab opens
   $('#tab-logs-link').on('shown.bs.tab', function () { loadLogs(); });
+  $('#tab-schedule-link').on('shown.bs.tab', function () { loadSchedule(); });
+
+  renderScheduleForm(INITIAL_SCHEDULE || DEFAULT_SCHEDULE_CONFIG);
 
   // Auto-refresh logs
   $('#autoRefreshLog').on('change', function () {
@@ -792,6 +858,95 @@ function removeFilterRow (btn) { btn.closest('.filter-row').remove(); }
 function restoreDefaults () {
   document.getElementById('filtersContainer').innerHTML = '';
   Object.entries(DEFAULT_FILTERS).forEach(([k, v]) => addFilterRow(k, v));
+}
+
+/* ── Schedule editor ─────────────────────────────────── */
+function renderScheduleForm (schedule) {
+  const cfg = schedule || DEFAULT_SCHEDULE_CONFIG;
+  const windowsWrap = document.getElementById('scheduleWindows');
+  if (!windowsWrap) return;
+
+  document.getElementById('scheduleEnabled').checked = !!cfg.enabled;
+  windowsWrap.innerHTML = '';
+
+  (cfg.windows || []).forEach((w, idx) => {
+    const slug = String(w.id || '').replace(/[^a-zA-Z0-9_-]/g, '') || 'row';
+    const rowId = `sch-enabled-${slug}-${idx}`;
+    const row = document.createElement('div');
+    row.className = 'schedule-grid mb-2';
+    row.innerHTML = `
+      <div>${esc(w.label || w.id || '')}<input type="hidden" class="sch-id" value="${esc(w.id || '')}"></div>
+      <input type="time" class="form-control form-control-sm sch-start" value="${esc(w.start || '09:30')}">
+      <input type="time" class="form-control form-control-sm sch-end" value="${esc(w.end || '16:00')}">
+      <input type="number" min="1" max="240" class="form-control form-control-sm sch-interval" value="${Number(w.interval_minutes || 5)}">
+      <div class="custom-control custom-switch">
+        <input type="checkbox" class="custom-control-input sch-enabled" id="${rowId}" ${w.enabled !== false ? 'checked' : ''}>
+        <label class="custom-control-label" for="${rowId}"></label>
+      </div>`;
+    windowsWrap.appendChild(row);
+  });
+
+  const after = cfg.after_hours || {};
+  document.getElementById('afterRunTime').value = after.run_time || '16:15';
+  document.getElementById('afterCloseTime').value = after.close || '20:00';
+  document.getElementById('afterEnabled').checked = after.enabled !== false;
+}
+
+function collectScheduleForm () {
+  const windows = [];
+  document.querySelectorAll('#scheduleWindows .schedule-grid').forEach((row) => {
+    windows.push({
+      id: row.querySelector('.sch-id').value,
+      start: row.querySelector('.sch-start').value,
+      end: row.querySelector('.sch-end').value,
+      interval_minutes: Number(row.querySelector('.sch-interval').value || '0'),
+      enabled: row.querySelector('.sch-enabled').checked,
+    });
+  });
+  return {
+    enabled: document.getElementById('scheduleEnabled').checked,
+    windows,
+    after_hours: {
+      enabled: document.getElementById('afterEnabled').checked,
+      run_time: document.getElementById('afterRunTime').value,
+      close: document.getElementById('afterCloseTime').value,
+    },
+  };
+}
+
+function loadSchedule () {
+  fetch('/schedule')
+    .then(r => r.json())
+    .then(d => {
+      renderScheduleForm(d.schedule || DEFAULT_SCHEDULE_CONFIG);
+      document.getElementById('scheduleStatus').textContent = 'Schedule loaded from server.';
+    })
+    .catch(() => {
+      document.getElementById('scheduleStatus').textContent = 'Failed to load schedule.';
+    });
+}
+
+function saveSchedule () {
+  const payload = collectScheduleForm();
+  fetch('/schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(async (r) => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Save failed');
+      renderScheduleForm(data.schedule);
+      document.getElementById('scheduleStatus').textContent = 'Schedule saved.';
+    })
+    .catch((err) => {
+      document.getElementById('scheduleStatus').textContent = `Save failed: ${err.message}`;
+    });
+}
+
+function restoreScheduleDefaults () {
+  renderScheduleForm(DEFAULT_SCHEDULE_CONFIG);
+  document.getElementById('scheduleStatus').textContent = 'Defaults restored in form. Click Save Schedule to apply.';
 }
 
 function esc (s) {

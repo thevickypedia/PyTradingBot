@@ -10,10 +10,18 @@ Schema
 ``<timestamp>`` list[dict]  — the raw scan records for that snapshot
 """
 
+import copy
 import shelve
 from typing import Dict, List, Optional
 
-from pytradingbot.constants import DB_DIR, DB_PATH, LOGGER
+from pytradingbot.constants import (
+    DB_DIR,
+    DB_INDEX_KEY,
+    DB_PATH,
+    DB_SCHEDULE_KEY,
+    DEFAULT_SCHEDULE,
+    LOGGER,
+)
 
 
 def save_scan(timestamp: str, data: list) -> None:
@@ -25,10 +33,10 @@ def save_scan(timestamp: str, data: list) -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     with shelve.open(DB_PATH) as db:
         db[timestamp] = data
-        index: list[str] = list(db.get("__index__", []))
+        index: list[str] = list(db.get(DB_INDEX_KEY, []))
         if timestamp not in index:
             index.append(timestamp)
-        db["__index__"] = index
+        db[DB_INDEX_KEY] = index
 
 
 def list_versions() -> List[Dict[str, int]]:
@@ -38,7 +46,7 @@ def list_versions() -> List[Dict[str, int]]:
     """
     try:
         with shelve.open(DB_PATH) as db:
-            index: list[str] = list(db.get("__index__", []))
+            index: list[str] = list(db.get(DB_INDEX_KEY, []))
             return [{"timestamp": ts, "count": len(db.get(ts, []))} for ts in reversed(index)]
     except Exception as error:
         LOGGER.error("Failed to list versions: %s", error)
@@ -62,7 +70,7 @@ def latest_version() -> tuple[Optional[str], list]:
     """
     try:
         with shelve.open(DB_PATH) as db:
-            index: list[str] = list(db.get("__index__", []))
+            index: list[str] = list(db.get(DB_INDEX_KEY, []))
             if not index:
                 return None, []
             key = index[-1]  # last appended = most recent
@@ -70,3 +78,22 @@ def latest_version() -> tuple[Optional[str], list]:
     except Exception as warning:
         LOGGER.warning("Latest version not found: %s", warning)
         return None, []
+
+
+def load_schedule() -> dict:
+    """Return persisted scheduler config, or module defaults when unset/invalid."""
+    try:
+        with shelve.open(DB_PATH) as db:
+            stored = db.get(DB_SCHEDULE_KEY)
+            if isinstance(stored, dict):
+                return stored
+    except Exception as error:
+        LOGGER.error("Failed to load schedule config: %s", error)
+    return copy.deepcopy(DEFAULT_SCHEDULE)
+
+
+def save_schedule(schedule: dict) -> None:
+    """Persist scheduler config."""
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+    with shelve.open(DB_PATH) as db:
+        db[DB_SCHEDULE_KEY] = schedule
