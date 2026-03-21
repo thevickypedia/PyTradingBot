@@ -111,12 +111,16 @@
 
     /* ── Log viewer ─────────────────────────────────────── */
     .log-viewer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; height: 540px; overflow-y: auto; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: .75rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .log-debug   { color: var(--purple); }
     .log-error   { color: var(--red);    font-weight: 600; }
     .log-warning { color: var(--yellow); font-weight: 600; }
     .log-info    { color: var(--blue); }
     .log-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+    .log-toolbar-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
     .log-filename { font-size: .78rem; color: var(--muted); }
     .log-filename code { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; color: var(--text); }
+    .log-filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 26px 4px 9px; font-size: .78rem; }
+    .log-filter-select:focus { outline: none; border-color: var(--blue); }
 
     /* ── Empty / loading states ─────────────────────────── */
     .empty-state { text-align: center; padding: 72px 24px; }
@@ -554,7 +558,16 @@
           Log file: <code id="logFilename">—</code>
           <span class="ml-3 text-muted" id="logLines" style="font-size:.75rem;"></span>
         </div>
-        <div class="d-flex align-items-center">
+        <div class="log-toolbar-actions">
+          <label class="text-muted mb-0" for="logLevelFilter" style="font-size:.78rem;">
+            Level:
+            <select id="logLevelFilter" class="log-filter-select ml-1">
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+          </label>
           <label class="text-muted mr-3 mb-0" style="font-size:.78rem;">
             <input type="checkbox" id="autoRefreshLog" class="mr-1"> Auto-refresh (5s)
           </label>
@@ -584,6 +597,7 @@ const DEFAULT_SCHEDULE_CONFIG  = {{ default_schedule | tojson }};
 const CURRENT_VERSION          = {{ current_version | tojson }};
 const COOLDOWN_SECONDS         = {{ cooldown_seconds }};
 const INITIAL_COOLDOWN_REMAINING = {{ cooldown_remaining }};
+const LOG_FILTER_STORAGE_KEY   = 'pytradingbot-log-level-filter';
 
 /* ── State ────────────────────────────────────────────── */
 let pollId          = null;
@@ -592,6 +606,7 @@ let elapsedStart    = null;
 let logAutoId       = null;
 let cooldownId      = null;
 let cooldownLeft    = INITIAL_COOLDOWN_REMAINING;
+let rawLogContent   = '';
 
 /* ── Init ─────────────────────────────────────────────── */
 $(function () {
@@ -620,11 +635,17 @@ $(function () {
   $('#tab-schedule-link').on('shown.bs.tab', function () { loadSchedule(); });
 
   renderScheduleForm(INITIAL_SCHEDULE || DEFAULT_SCHEDULE_CONFIG);
+  initializeLogFilter();
 
   // Auto-refresh logs
   $('#autoRefreshLog').on('change', function () {
     if (this.checked) { logAutoId = setInterval(loadLogs, 5000); }
     else              { clearInterval(logAutoId); logAutoId = null; }
+  });
+
+  $('#logLevelFilter').on('change', function () {
+    sessionStorage.setItem(LOG_FILTER_STORAGE_KEY, this.value);
+    applyLogFilter();
   });
 });
 
@@ -983,27 +1004,69 @@ function esc (s) {
 }
 
 /* ── Log viewer ───────────────────────────────────────── */
+function initializeLogFilter () {
+  const saved = sessionStorage.getItem(LOG_FILTER_STORAGE_KEY) || 'DEBUG';
+  const select = document.getElementById('logLevelFilter');
+  if (select) {
+    select.value = saved;
+  }
+}
+
+function getSelectedLogLevel () {
+  const select = document.getElementById('logLevelFilter');
+  return select ? select.value : 'DEBUG';
+}
+
+function filterLogLines (raw, level) {
+  const priorities = { DEBUG: 10, INFO: 20, WARNING: 30, ERROR: 40 };
+  const threshold = priorities[level] || priorities.DEBUG;
+
+  return String(raw || '')
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (!line.trim()) return false;
+      const match = line.match(/ - (DEBUG|INFO|WARNING|ERROR) - /);
+      if (!match) return threshold <= priorities.DEBUG;
+      return priorities[match[1]] >= threshold;
+    })
+    .join('\n');
+}
+
+function renderFilteredLogs (raw) {
+  const filtered = filterLogLines(raw, getSelectedLogLevel());
+  const pre = document.getElementById('logContent');
+  pre.innerHTML = colorizeLog(filtered || 'No log lines match the selected level.');
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function applyLogFilter () {
+  renderFilteredLogs(rawLogContent);
+}
+
 function loadLogs () {
   fetch('/logs')
     .then(r => r.json())
     .then(d => {
+      rawLogContent = d.content || '';
       document.getElementById('logFilename').textContent = d.filename || '—';
       if (d.total_lines > 500) {
         document.getElementById('logLines').textContent = `(showing last 500 of ${d.total_lines} lines)`;
       } else {
         document.getElementById('logLines').textContent = d.total_lines ? `(${d.total_lines} lines)` : '';
       }
-      const pre = document.getElementById('logContent');
-      pre.innerHTML = colorizeLog(d.content || 'No log content.');
-      pre.scrollTop = pre.scrollHeight;
+      renderFilteredLogs(rawLogContent);
     })
-    .catch(() => { document.getElementById('logContent').textContent = 'Failed to load logs.'; });
+    .catch(() => {
+      rawLogContent = '';
+      document.getElementById('logContent').textContent = 'Failed to load logs.';
+    });
 }
 
 function colorizeLog (raw) {
   const escaped = raw
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   return escaped
+    .replace(/\bDEBUG\b/g,   '<span class="log-debug">DEBUG</span>')
     .replace(/\bERROR\b/g,   '<span class="log-error">ERROR</span>')
     .replace(/\bWARNING\b/g, '<span class="log-warning">WARNING</span>')
     .replace(/\bINFO\b/g,    '<span class="log-info">INFO</span>');
