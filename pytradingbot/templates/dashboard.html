@@ -121,6 +121,8 @@
     .log-filename code { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; color: var(--text); }
     .log-filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 26px 4px 9px; font-size: .78rem; }
     .log-filter-select:focus { outline: none; border-color: var(--blue); }
+    .log-file-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 26px 4px 9px; font-size: .78rem; max-width: 260px; }
+    .log-file-select:focus { outline: none; border-color: var(--blue); }
 
     /* ── Empty / loading states ─────────────────────────── */
     .empty-state { text-align: center; padding: 72px 24px; }
@@ -142,7 +144,7 @@
     .schedule-grid .custom-select { background: var(--surface); border-color: var(--border); color: var(--text); font-size: .82rem; }
     .schedule-grid .form-control:focus,
     .schedule-grid .custom-select:focus { border-color: var(--blue); box-shadow: none; }
-    .schedule-note { color: var(--muted); font-size: .78rem; }
+    .schedule-note { color: var(--muted); font-size: .78rem; } .schedule-disabled { opacity: .45; }
 
     /* Status badge in navbar */
     #statusBadge { font-size: .72rem; padding: 4px 10px; border-radius: 20px; font-weight: 700; letter-spacing: .04em; }
@@ -555,7 +557,8 @@
     <div class="tab-pane fade" id="tab-logs" role="tabpanel">
       <div class="log-toolbar">
         <div class="log-filename">
-          Log file: <code id="logFilename">—</code>
+          Log file:
+          <select id="logFileSelect" class="log-file-select ml-2" title="Select log file"></select>
           <span class="ml-3 text-muted" id="logLines" style="font-size:.75rem;"></span>
         </div>
         <div class="log-toolbar-actions">
@@ -568,10 +571,10 @@
               <option value="ERROR">ERROR</option>
             </select>
           </label>
-          <label class="text-muted mr-3 mb-0" style="font-size:.78rem;">
+          <label class="text-muted mr-3 mb-0" id="autoRefreshLogWrap" style="font-size:.78rem;">
             <input type="checkbox" id="autoRefreshLog" class="mr-1"> Auto-refresh (5s)
           </label>
-          <button class="btn-ghost mr-2" onclick="loadLogs()">↺ Refresh</button>
+          <button class="btn-ghost mr-2" id="refreshLogsBtn" onclick="loadLogs()">↺ Refresh</button>
           <button class="btn-ghost" onclick="scrollLogBottom()">⬇ Bottom</button>
         </div>
       </div>
@@ -598,6 +601,7 @@ const CURRENT_VERSION          = {{ current_version | tojson }};
 const COOLDOWN_SECONDS         = {{ cooldown_seconds }};
 const INITIAL_COOLDOWN_REMAINING = {{ cooldown_remaining }};
 const LOG_FILTER_STORAGE_KEY   = 'pytradingbot-log-level-filter';
+const LOG_FILE_STORAGE_KEY     = 'pytradingbot-log-file';
 
 /* ── State ────────────────────────────────────────────── */
 let pollId          = null;
@@ -607,6 +611,7 @@ let logAutoId       = null;
 let cooldownId      = null;
 let cooldownLeft    = INITIAL_COOLDOWN_REMAINING;
 let rawLogContent   = '';
+let latestLogFile   = null;
 
 /* ── Init ─────────────────────────────────────────────── */
 $(function () {
@@ -631,7 +636,7 @@ $(function () {
   }
 
   // Load logs when tab opens
-  $('#tab-logs-link').on('shown.bs.tab', function () { loadLogs(); });
+  $('#tab-logs-link').on('shown.bs.tab', function () { initializeLogFiles().then(loadLogs); });
   $('#tab-schedule-link').on('shown.bs.tab', function () { loadSchedule(); });
 
   renderScheduleForm(INITIAL_SCHEDULE || DEFAULT_SCHEDULE_CONFIG);
@@ -646,6 +651,14 @@ $(function () {
   $('#logLevelFilter').on('change', function () {
     sessionStorage.setItem(LOG_FILTER_STORAGE_KEY, this.value);
     applyLogFilter();
+  });
+
+  $('#logFileSelect').on('change', function () {
+    sessionStorage.setItem(LOG_FILE_STORAGE_KEY, this.value || '');
+    if (!isCurrentLogSelected()) {
+      stopAutoRefreshLogs();
+    }
+    loadLogs();
   });
 });
 
@@ -911,6 +924,66 @@ function renderScheduleForm (schedule) {
   document.getElementById('afterRunTime').value = after.run_time || '16:15';
   document.getElementById('afterCloseTime').value = after.close || '20:00';
   document.getElementById('afterEnabled').checked = after.enabled !== false;
+
+  wireScheduleToggleEvents();
+  applyScheduleControlStates();
+}
+
+function wireScheduleToggleEvents () {
+  const master = document.getElementById('scheduleEnabled');
+  const after = document.getElementById('afterEnabled');
+
+  if (master) {
+    master.onchange = applyScheduleControlStates;
+  }
+  if (after) {
+    after.onchange = applyScheduleControlStates;
+  }
+  document.querySelectorAll('#scheduleWindows .sch-enabled').forEach((toggle) => {
+    toggle.onchange = applyScheduleControlStates;
+  });
+}
+
+function _setScheduleRowState (row, enabled) {
+  row.classList.toggle('schedule-disabled', !enabled);
+  const start = row.querySelector('.sch-start');
+  const end = row.querySelector('.sch-end');
+  const interval = row.querySelector('.sch-interval');
+  if (start) start.disabled = !enabled;
+  if (end) end.disabled = !enabled;
+  if (interval) interval.disabled = !enabled;
+}
+
+function applyScheduleControlStates () {
+  const topEnabled = !!document.getElementById('scheduleEnabled')?.checked;
+  const windowsWrap = document.getElementById('scheduleWindows');
+  const afterEnabled = !!document.getElementById('afterEnabled')?.checked;
+
+  // Gray out + disable all child controls when scheduler is globally disabled.
+  if (windowsWrap) {
+    windowsWrap.classList.toggle('schedule-disabled', !topEnabled);
+    document.querySelectorAll('#scheduleWindows .schedule-grid').forEach((row) => {
+      const rowToggle = row.querySelector('.sch-enabled');
+      if (rowToggle) {
+        rowToggle.disabled = !topEnabled;
+      }
+      _setScheduleRowState(row, topEnabled && !!rowToggle?.checked);
+    });
+  }
+
+  const afterRun = document.getElementById('afterRunTime');
+  const afterClose = document.getElementById('afterCloseTime');
+  const afterSwitch = document.getElementById('afterEnabled');
+  const afterSection = afterSwitch ? afterSwitch.closest('.schedule-grid') : null;
+  if (afterSwitch) {
+    afterSwitch.disabled = !topEnabled;
+  }
+  const afterActive = topEnabled && afterEnabled;
+  if (afterRun) afterRun.disabled = !afterActive;
+  if (afterClose) afterClose.disabled = !afterActive;
+  if (afterSection) {
+    afterSection.classList.toggle('schedule-disabled', !afterActive);
+  }
 }
 
 function collectScheduleForm () {
@@ -1043,17 +1116,106 @@ function applyLogFilter () {
   renderFilteredLogs(rawLogContent);
 }
 
+function stopAutoRefreshLogs () {
+  const autoCheckbox = document.getElementById('autoRefreshLog');
+  if (logAutoId) {
+    clearInterval(logAutoId);
+    logAutoId = null;
+  }
+  if (autoCheckbox) {
+    autoCheckbox.checked = false;
+  }
+}
+
+function isCurrentLogSelected () {
+  const selected = document.getElementById('logFileSelect')?.value || '';
+  if (!latestLogFile) {
+    return true;
+  }
+  return selected === latestLogFile;
+}
+
+function toggleCurrentLogControls (isCurrent) {
+  const autoWrap = document.getElementById('autoRefreshLogWrap');
+  const refreshBtn = document.getElementById('refreshLogsBtn');
+  if (!autoWrap || !refreshBtn) return;
+
+  autoWrap.classList.toggle('d-none', !isCurrent);
+  refreshBtn.classList.toggle('d-none', !isCurrent);
+  if (!isCurrent) {
+    stopAutoRefreshLogs();
+  }
+}
+
+function populateLogFileSelect (files, latestName) {
+  const select = document.getElementById('logFileSelect');
+  if (!select) return;
+
+  const previous = sessionStorage.getItem(LOG_FILE_STORAGE_KEY) || select.value || '';
+  select.innerHTML = '';
+
+  (files || []).forEach((name) => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    select.appendChild(option);
+  });
+
+  if (previous && (files || []).includes(previous)) {
+    select.value = previous;
+  } else if (latestName && (files || []).includes(latestName)) {
+    select.value = latestName;
+    sessionStorage.setItem(LOG_FILE_STORAGE_KEY, latestName);
+  } else {
+    select.value = (files || [])[0] || '';
+    sessionStorage.setItem(LOG_FILE_STORAGE_KEY, select.value || '');
+  }
+
+  latestLogFile = latestName || null;
+  toggleCurrentLogControls(isCurrentLogSelected());
+}
+
+function initializeLogFiles () {
+  return fetch('/logs?all=true')
+    .then((r) => r.json())
+    .then((d) => {
+      populateLogFileSelect(d.files || [], d.latest_filename || null);
+    })
+    .catch(() => {
+      populateLogFileSelect([], null);
+    });
+}
+
 function loadLogs () {
-  fetch('/logs')
+  const selectedFile = document.getElementById('logFileSelect')?.value || latestLogFile || '';
+  const params = new URLSearchParams();
+  if (selectedFile) {
+    params.set('filename', selectedFile);
+  }
+  params.set('all', 'true');
+
+  fetch(`/logs?${params.toString()}`)
     .then(r => r.json())
     .then(d => {
+      populateLogFileSelect(d.files || [], d.latest_filename || null);
+      sessionStorage.setItem(LOG_FILE_STORAGE_KEY, document.getElementById('logFileSelect')?.value || '');
+
+      if (d.error) {
+        rawLogContent = '';
+        document.getElementById('logLines').textContent = '';
+        toggleCurrentLogControls(false);
+        document.getElementById('logContent').textContent = d.error;
+        return;
+      }
+
       rawLogContent = d.content || '';
-      document.getElementById('logFilename').textContent = d.filename || '—';
       if (d.total_lines > 500) {
         document.getElementById('logLines').textContent = `(showing last 500 of ${d.total_lines} lines)`;
       } else {
         document.getElementById('logLines').textContent = d.total_lines ? `(${d.total_lines} lines)` : '';
       }
+
+      toggleCurrentLogControls(Boolean(d.is_current));
       renderFilteredLogs(rawLogContent);
     })
     .catch(() => {

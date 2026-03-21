@@ -308,24 +308,84 @@ def get_versions() -> JSONResponse:
     return JSONResponse(versions)
 
 
-def get_logs() -> JSONResponse:
-    """Stream the latest log file (last 500 lines)."""
-    LOGGER.debug("Log viewer requested latest application log file.")
+def get_logs(request: Request) -> JSONResponse:
+    """Return logs for a selected file, with optional file-list metadata."""
+    include_all = request.query_params.get("all", "").lower() in {"1", "true", "yes"}
+    requested_name = request.query_params.get("filename")
+
+    LOGGER.debug("Log viewer requested logs. include_all=%s filename=%s", include_all, requested_name)
     files = sorted(LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if LOGS_DIR.exists() else []
+    file_names = [file.name for file in files]
+
     if not files:
         LOGGER.warning("Log viewer requested logs but no log files were found.")
-        return JSONResponse({"content": "No log files found.", "filename": None, "total_lines": 0})
+        return JSONResponse(
+            {
+                "content": "No log files found.",
+                "filename": None,
+                "selected_filename": None,
+                "latest_filename": None,
+                "total_lines": 0,
+                "files": [],
+                "is_current": False,
+            }
+        )
+
     latest = files[0]
+    selected = latest
+    if requested_name:
+        selected_match = next((file for file in files if file.name == requested_name), None)
+        if selected_match is None:
+            LOGGER.warning("Requested log file %s was not found.", requested_name)
+            return JSONResponse(
+                {
+                    "content": "",
+                    "filename": None,
+                    "selected_filename": None,
+                    "latest_filename": latest.name,
+                    "total_lines": 0,
+                    "files": file_names if include_all else [],
+                    "is_current": False,
+                    "error": f"Requested log file not found: {requested_name}",
+                },
+                status_code=404,
+            )
+        selected = selected_match
+
+    if include_all and not requested_name:
+        LOGGER.debug("Returning metadata for %d log files without file content.", len(file_names))
+        return JSONResponse(
+            {
+                "files": file_names,
+                "latest_filename": latest.name,
+            }
+        )
+
     try:
-        lines = latest.read_text(errors="replace").splitlines()
-        LOGGER.info("Returning log file %s with %d total lines.", latest.name, len(lines))
+        lines = selected.read_text(errors="replace").splitlines()
+        is_current = selected.name == latest.name
+        LOGGER.info("Returning log file %s with %d total lines (is_current=%s).", selected.name, len(lines), is_current)
         return JSONResponse(
             {
                 "content": "\n".join(lines[-500:]),
-                "filename": latest.name,
+                "filename": selected.name,
+                "selected_filename": selected.name,
+                "latest_filename": latest.name,
                 "total_lines": len(lines),
+                "files": file_names if include_all else [],
+                "is_current": is_current,
             }
         )
     except Exception as exc:  # noqa: BLE001
-        LOGGER.error("Failed to read log file %s: %s", latest, exc)
-        return JSONResponse({"content": f"Error reading log: {exc}", "filename": latest.name, "total_lines": 0})
+        LOGGER.error("Failed to read log file %s: %s", selected, exc)
+        return JSONResponse(
+            {
+                "content": f"Error reading log: {exc}",
+                "filename": selected.name,
+                "selected_filename": selected.name,
+                "latest_filename": latest.name,
+                "total_lines": 0,
+                "files": file_names if include_all else [],
+                "is_current": selected.name == latest.name,
+            }
+        )
