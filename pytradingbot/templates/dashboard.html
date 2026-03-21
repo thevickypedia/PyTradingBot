@@ -199,9 +199,7 @@
 
   <div class="ml-auto d-flex align-items-center">
     <span id="statusBadge" class="badge-idle mr-3">⏸ Idle</span>
-    <span class="navbar-text mr-3" id="navTimestamp">
-      {% if timestamp %}🕒 {{ timestamp }}{% endif %}
-    </span>
+    <button id="logout" title="Logout" onclick="logout()" class="btn btn-sm" style="background: var(--blue); color: white; border: none; border-radius: 5px; padding: 0.4rem 0.8rem; font-size: 0.85rem;">Logout</button>
   </div>
 </nav>
 
@@ -1259,6 +1257,16 @@ function initDataTable () {
     },
   });
 }
+</script>
+
+<script>
+    const logoutEndpoint = "{{ logout }}";
+    if (!logoutEndpoint.startsWith('/')) {
+        document.getElementById("logout").style.display = "none";
+    }
+    function logout() {
+        window.location.href = logoutEndpoint;
+    }
 </script>
 
 </body>

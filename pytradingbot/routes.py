@@ -4,6 +4,7 @@ import re
 import time
 from datetime import datetime
 
+import uiauth
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -14,7 +15,9 @@ from pytradingbot.constants import (
     DEFAULT_SCHEDULE,
     LOGGER,
     LOGS_DIR,
+    PASSWORD,
     SCAN_COOLDOWN_SECONDS,
+    USERNAME,
     ScanStatus,
 )
 from pytradingbot.main import builder
@@ -160,23 +163,25 @@ def _render(
         displayed_timestamp = getattr(request.app.state, "last_scan_ts", None)
         current_version = getattr(request.app.state, "last_scan_ts", None)
 
-    return request.app.state.templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
-            "stocks": displayed_stocks,
-            "timestamp": displayed_timestamp,
-            "scan_status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
-            "scan_error": getattr(request.app.state, "scan_error", None),
-            "filters": getattr(request.app.state, "current_filters", dict(DEFAULT_FILTERS)),
-            "default_filters": dict(DEFAULT_FILTERS),
-            "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(DEFAULT_SCHEDULE)),
-            "default_schedule": copy.deepcopy(DEFAULT_SCHEDULE),
-            "cooldown_remaining": _cooldown_remaining(request),
-            "cooldown_seconds": SCAN_COOLDOWN_SECONDS,
-            "current_version": current_version,
-        },
-    )
+    args = {
+        "request": request,
+        "stocks": displayed_stocks,
+        "timestamp": displayed_timestamp,
+        "scan_status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
+        "scan_error": getattr(request.app.state, "scan_error", None),
+        "filters": getattr(request.app.state, "current_filters", dict(DEFAULT_FILTERS)),
+        "default_filters": dict(DEFAULT_FILTERS),
+        "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(DEFAULT_SCHEDULE)),
+        "default_schedule": copy.deepcopy(DEFAULT_SCHEDULE),
+        "cooldown_remaining": _cooldown_remaining(request),
+        "cooldown_seconds": SCAN_COOLDOWN_SECONDS,
+        "current_version": current_version,
+    }
+
+    if USERNAME and PASSWORD:
+        args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
+
+    return request.app.state.templates.TemplateResponse("dashboard.html", args)
 
 
 async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypass_cooldown: bool = False) -> bool:
@@ -211,7 +216,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
             app.state.last_scan_completed = datetime.now()
             app.state.scan_status = ScanStatus.DONE
             LOGGER.info("%s scan completed successfully at %s with %d records.", source, ts, len(data))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             LOGGER.error("Scan failed with filters %s (%s): %s", filters, source, exc)
             app.state.scan_status = ScanStatus.ERROR
             app.state.scan_error = str(exc)[:300]
@@ -376,7 +381,7 @@ def get_logs(request: Request) -> JSONResponse:
                 "is_current": is_current,
             }
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         LOGGER.error("Failed to read log file %s: %s", selected, exc)
         return JSONResponse(
             {

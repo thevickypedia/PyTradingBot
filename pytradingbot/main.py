@@ -269,6 +269,7 @@ def builder(
         # Replace float NaN with None for safe Jinja2 / JSON rendering.
         # df.where() cannot guarantee None for numeric columns, so we check each value.
         def _clean(v):
+            """Convert NaN to None, leave other values unchanged."""
             try:
                 return None if (isinstance(v, float) and math.isnan(v)) else v
             except (TypeError, ValueError):

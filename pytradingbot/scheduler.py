@@ -118,7 +118,7 @@ class ScanScheduler:
         while not self._stop_event.is_set():
             try:
                 await self._tick()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 LOGGER.error("Scheduler tick failed: %s", exc)
 
             try:
