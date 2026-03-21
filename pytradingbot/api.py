@@ -40,7 +40,9 @@ async def lifespan(app_: FastAPI):
     Loads the latest historical snapshot from the shelve DB so the dashboard
     shows data immediately on restart without requiring a fresh scan.
     """
+    LOGGER.debug("Starting application lifespan initialization.")
     app_.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    LOGGER.debug("Templates initialized from %s", TEMPLATES_DIR)
 
     # Pre-populate from the last saved scan (if any)
     latest_ts, latest_data = storage.latest_version()
@@ -54,21 +56,30 @@ async def lifespan(app_: FastAPI):
     app_.state.scan_source = None
     app_.state.last_scheduler_minute = None
     app_.state.schedule_config = storage.load_schedule() or copy.deepcopy(DEFAULT_SCHEDULE)
+    LOGGER.debug(
+        "App state primed. last_scan_ts=%s scan_status=%s schedule_enabled=%s",
+        latest_ts,
+        app_.state.scan_status,
+        app_.state.schedule_config.get("enabled", True),
+    )
 
     app_.state.scheduler = ScanScheduler(app_, trigger_scan=run_scan_job)
     app_.state.scheduler.start()
+    LOGGER.info("Scheduler initialized and started.")
 
     LOGGER.info("Loaded latest scan from %s with %d stocks.", latest_ts, len(latest_data))
     LOGGER.info("Server started.")
 
     yield  # Server is running
 
+    LOGGER.debug("Application shutdown requested.")
     await app_.state.scheduler.stop()
     LOGGER.info("Server stopped.")
 
 
 def get_routes() -> List[APIRoute]:
     """Return all API routes."""
+    LOGGER.debug("Building API route table.")
     return [
         APIRoute(
             path="/health",
@@ -132,6 +143,7 @@ app = FastAPI(title="Trading Bot Dashboard", lifespan=lifespan)
 app.__name__ = "app"
 api_routes = get_routes()
 if all((USERNAME, PASSWORD)):
+    LOGGER.info("UI auth is enabled for protected routes.")
     uiauth.protect(
         app=app,
         username=USERNAME,
@@ -139,16 +151,15 @@ if all((USERNAME, PASSWORD)):
         routes=api_routes,
     )
 else:
+    LOGGER.warning("USERNAME and PASSWORD are not set. API endpoints are unprotected.")
     warnings.warn(
         "USERNAME and PASSWORD are not set. API endpoints are unprotected.",
         UserWarning,
     )
     app.routes.extend(get_routes())
+    LOGGER.debug("Routes attached directly to app without auth wrapper.")
 
 # TODO:
-#   Include favicon.ico
-#   Support scheduled runs
-#   Add CORS protection
 #   Add notifications through Telegram and Gmail
 #   Extend Telegram support to score an individual ticker
 #   Include multiple candlestick trackers

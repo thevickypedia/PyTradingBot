@@ -23,19 +23,24 @@ class ScanStatus(StrEnum):
 LOGS_DIR = pathlib.Path("logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.INFO)
+LOG_LEVEL = (os.getenv("LOG_LEVEL") or os.getenv("log_level") or "DEBUG").upper()
+
+LOGGER = logging.getLogger("pytradingbot")
+LOGGER.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
 handler = logging.FileHandler(
     filename=str(LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
+handler.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
 handler.setFormatter(
     fmt=logging.Formatter(
         datefmt="%b-%d-%Y %I:%M:%S %p",
         fmt="%(asctime)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
     )
 )
-LOGGER.addHandler(hdlr=handler)
+if not LOGGER.handlers:
+    LOGGER.addHandler(hdlr=handler)
+LOGGER.propagate = False
 
 DEFAULT_FILTERS = {
     "Exchange": "NASDAQ",

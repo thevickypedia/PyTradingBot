@@ -38,18 +38,24 @@ def _cooldown_remaining(request: Request) -> int:
     """Seconds left in the post-scan cooldown (0 means free to scan)."""
     last: datetime | None = getattr(request.app.state, "last_scan_completed", None)
     if last is None:
+        LOGGER.debug("Cooldown check for request returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    return max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    LOGGER.debug("Cooldown check for request returned %s seconds remaining.", remaining)
+    return remaining
 
 
 def _cooldown_remaining_app(app: FastAPI) -> int:
     """Cooldown remain in app state."""
     last: datetime | None = getattr(app.state, "last_scan_completed", None)
     if last is None:
+        LOGGER.debug("App cooldown check returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    return max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    LOGGER.debug("App cooldown check returned %s seconds remaining.", remaining)
+    return remaining
 
 
 def _validate_time(value: str) -> str:
@@ -66,6 +72,7 @@ def _validate_time(value: str) -> str:
 
 def _normalize_schedule(payload: ScheduleRequest) -> dict:
     """Normalize schedule payload."""
+    LOGGER.debug("Normalizing schedule payload. enabled=%s windows=%d", payload.enabled, len(payload.windows))
     defaults = copy.deepcopy(DEFAULT_SCHEDULE)
     ordered_ids = [window["id"] for window in defaults["windows"]]
     windows_by_id = {window["id"]: window for window in defaults["windows"]}
@@ -81,8 +88,10 @@ def _normalize_schedule(payload: ScheduleRequest) -> dict:
         end = _validate_time(str(window.get("end", default_window["end"])))
         interval_minutes = int(window.get("interval_minutes", default_window["interval_minutes"]))
         if interval_minutes <= 0 or interval_minutes > 240:
+            LOGGER.warning("Rejected schedule interval %s for window %s.", interval_minutes, window_id)
             raise ValueError(f"Interval for {window_id} must be between 1 and 240 minutes.")
         if start == end:
+            LOGGER.warning("Rejected schedule window %s because start and end were identical (%s).", window_id, start)
             raise ValueError(f"Start and end cannot be the same for {window_id}.")
 
         normalized_windows.append(
@@ -98,6 +107,7 @@ def _normalize_schedule(payload: ScheduleRequest) -> dict:
 
     found_ids = [row["id"] for row in normalized_windows]
     if set(found_ids) != set(ordered_ids) or len(found_ids) != len(set(found_ids)):
+        LOGGER.warning("Rejected schedule payload because required windows were missing or duplicated: %s", found_ids)
         raise ValueError("All schedule windows are required in request payload.")
 
     normalized_windows.sort(key=lambda row: ordered_ids.index(row["id"]))
@@ -110,7 +120,14 @@ def _normalize_schedule(payload: ScheduleRequest) -> dict:
         "close": _validate_time(str(after_hours_payload.get("close", after_hours_default["close"]))),
     }
     if after_hours["run_time"] >= after_hours["close"]:
+        LOGGER.warning(
+            "Rejected after-hours schedule because run_time=%s was not before close=%s.",
+            after_hours["run_time"],
+            after_hours["close"],
+        )
         raise ValueError("after_hours.run_time must be before after_hours.close")
+
+    LOGGER.info("Schedule payload normalized successfully. enabled=%s", payload.enabled)
 
     return {
         "enabled": bool(payload.enabled),
@@ -132,6 +149,7 @@ def _render(
     current state from ``app.state``.
     """
     viewing_version = version_ts is not None and version_data is not None
+    LOGGER.debug("Rendering dashboard. viewing_version=%s version_ts=%s", viewing_version, version_ts)
 
     if viewing_version:
         displayed_stocks = version_data
@@ -166,18 +184,23 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
     lock: asyncio.Lock = app.state.scan_lock
     async with lock:
         if getattr(app.state, "scan_status", ScanStatus.IDLE) == ScanStatus.RUNNING:
+            LOGGER.warning("Rejected %s scan request because a scan is already running.", source)
             return False
         if not bypass_cooldown and _cooldown_remaining_app(app) > 0:
+            LOGGER.warning("Rejected %s scan request because cooldown is still active.", source)
             return False
 
         app.state.current_filters = filters
         app.state.scan_status = ScanStatus.RUNNING
         app.state.scan_error = None
         app.state.scan_source = source
+        LOGGER.info("Accepted %s scan request with %d filters.", source, len(filters))
+        LOGGER.debug("Scan filters for %s run: %s", source, filters)
 
     async def _run_scan() -> None:
         """Run background scan and update app state when it finishes."""
         try:
+            LOGGER.debug("Background scan task started for source=%s.", source)
             data = await asyncio.to_thread(builder, to_dict=True, filters=filters)
 
             ts = datetime.now().strftime("%Y-%m-%d %I:%M %p ") + time.strftime("%Z")
@@ -187,6 +210,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
             app.state.last_scan_ts = ts
             app.state.last_scan_completed = datetime.now()
             app.state.scan_status = ScanStatus.DONE
+            LOGGER.info("%s scan completed successfully at %s with %d records.", source, ts, len(data))
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Scan failed with filters %s (%s): %s", filters, source, exc)
             app.state.scan_status = ScanStatus.ERROR
@@ -199,17 +223,22 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
 def dashboard(request: Request) -> HTMLResponse:
     """Render the dashboard, optionally at a historical *?version=* snapshot."""
     version = request.query_params.get("version")
+    LOGGER.debug("Dashboard requested. version=%s", version)
     if version:
         data = storage.load_version(version)
         if data is not None:
+            LOGGER.info("Rendering requested historical version %s with %d records.", version, len(data))
             return _render(request, version_ts=version, version_data=data)
+        LOGGER.warning("Requested dashboard version %s was not found; falling back to latest view.", version)
     return _render(request)
 
 
 async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
     """Start a background scan.  Enforces a 60-second post-scan cooldown."""
+    LOGGER.debug("Manual scan requested through API.")
     remaining = _cooldown_remaining(request)
     if remaining > 0:
+        LOGGER.warning("Manual scan request blocked by cooldown. remaining_seconds=%s", remaining)
         return JSONResponse(
             {"status": "cooldown", "remaining_seconds": remaining},
             status_code=429,
@@ -217,11 +246,21 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
 
     filters = body.filters if body.filters else dict(request.app.state.current_filters)
     started = await run_scan_job(request.app, filters, "manual", False)
+    if started:
+        LOGGER.info("Manual scan request accepted.")
+    else:
+        LOGGER.warning("Manual scan request returned already_running.")
     return JSONResponse({"status": "started" if started else "already_running"}, status_code=202)
 
 
 def scan_status(request: Request) -> JSONResponse:
     """Poll endpoint: returns current status, result count, timestamp, and cooldown."""
+    LOGGER.debug(
+        "Scan status requested. status=%s source=%s timestamp=%s",
+        getattr(request.app.state, "scan_status", ScanStatus.IDLE),
+        getattr(request.app.state, "scan_source", None),
+        getattr(request.app.state, "last_scan_ts", None),
+    )
     return JSONResponse(
         {
             "status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
@@ -236,6 +275,7 @@ def scan_status(request: Request) -> JSONResponse:
 
 def get_schedule(request: Request) -> JSONResponse:
     """Return current and default scheduler configuration."""
+    LOGGER.debug("Schedule configuration requested.")
     return JSONResponse(
         {
             "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(DEFAULT_SCHEDULE)),
@@ -246,29 +286,39 @@ def get_schedule(request: Request) -> JSONResponse:
 
 def update_schedule(request: Request, body: ScheduleRequest) -> JSONResponse:
     """Persist scheduler configuration override."""
+    LOGGER.debug("Schedule update requested.")
     try:
         normalized = _normalize_schedule(body)
     except ValueError as exc:
+        LOGGER.warning("Schedule update rejected: %s", exc)
         return JSONResponse({"status": "error", "error": str(exc)}, status_code=400)
 
     storage.save_schedule(normalized)
     request.app.state.schedule_config = normalized
+    LOGGER.info("Schedule configuration saved successfully.")
     return JSONResponse({"status": "saved", "schedule": normalized})
 
 
 def get_versions() -> JSONResponse:
     """Return all stored scan snapshots newest-first as ``[{timestamp, count}]``."""
-    return JSONResponse(storage.list_versions())
+    versions = storage.list_versions()
+    LOGGER.debug("Returning %d stored scan versions.", len(versions))
+    if not versions:
+        LOGGER.warning("Versions requested but no stored scan snapshots were found.")
+    return JSONResponse(versions)
 
 
 def get_logs() -> JSONResponse:
     """Stream the latest log file (last 500 lines)."""
+    LOGGER.debug("Log viewer requested latest application log file.")
     files = sorted(LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if LOGS_DIR.exists() else []
     if not files:
+        LOGGER.warning("Log viewer requested logs but no log files were found.")
         return JSONResponse({"content": "No log files found.", "filename": None, "total_lines": 0})
     latest = files[0]
     try:
         lines = latest.read_text(errors="replace").splitlines()
+        LOGGER.info("Returning log file %s with %d total lines.", latest.name, len(lines))
         return JSONResponse(
             {
                 "content": "\n".join(lines[-500:]),
@@ -277,4 +327,5 @@ def get_logs() -> JSONResponse:
             }
         )
     except Exception as exc:  # noqa: BLE001
+        LOGGER.error("Failed to read log file %s: %s", latest, exc)
         return JSONResponse({"content": f"Error reading log: {exc}", "filename": latest.name, "total_lines": 0})
