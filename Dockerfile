@@ -13,7 +13,7 @@ COPY . /temp/pytradingbot
 RUN if [ "$VERSION" = "latest" ]; then \
       cd /temp/pytradingbot && pip install --upgrade pip uv && uv pip install . --system && rm -rf /temp/pytradingbot; \
     else \
-      pip install --upgrade pip uv && uv pip install "pytradingbot==$VERSION"; \
+      pip install --upgrade pip uv && uv pip install "pytradingbot==$VERSION" --system; \
     fi
 
 COPY healthcheck.sh /healthcheck.sh
