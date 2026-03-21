@@ -1,6 +1,5 @@
 import sys
 
-from pytradingbot.server import start
 from pytradingbot.version import __version__
 
 
@@ -40,6 +39,8 @@ def commandline() -> None:
         sys.exit(0)
 
     if start_server:
+        from pytradingbot.server import start
+
         start()
     else:
         print(

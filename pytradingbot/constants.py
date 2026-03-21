@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import socket
 from datetime import datetime
 from enum import StrEnum
 
@@ -20,12 +19,13 @@ class ScanStatus(StrEnum):
     ERROR = "error"
 
 
-os.makedirs("logs", exist_ok=True)
+LOGS_DIR = pathlib.Path("logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 handler = logging.FileHandler(
-    filename=os.path.join("logs", f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
+    filename=str(LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
 handler.setFormatter(
@@ -48,7 +48,7 @@ DEFAULT_FILTERS = {
 }
 
 # API Starter pack
-HOST = os.getenv("HOST") or os.getenv("host") or socket.gethostbyname("localhost") or "0.0.0.0"
+HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")
 
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"

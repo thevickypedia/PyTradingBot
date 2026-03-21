@@ -2,7 +2,6 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -12,6 +11,7 @@ from pytradingbot import storage
 from pytradingbot.constants import (
     DEFAULT_FILTERS,
     LOGGER,
+    LOGS_DIR,
     SCAN_COOLDOWN_SECONDS,
     ScanStatus,
 )
@@ -150,8 +150,7 @@ def get_versions() -> JSONResponse:
 
 def get_logs() -> JSONResponse:
     """Stream the latest log file (last 500 lines)."""
-    log_dir = Path(__file__).parent.parent / "logs"
-    files = sorted(log_dir.glob("pytradingbot_*.log"), reverse=True) if log_dir.exists() else []
+    files = sorted(LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if LOGS_DIR.exists() else []
     if not files:
         return JSONResponse({"content": "No log files found.", "filename": None, "total_lines": 0})
     latest = files[0]

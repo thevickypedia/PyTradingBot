@@ -14,7 +14,3 @@ def start() -> None:
         port=PORT,
         app=f"{module_name.parent.stem}.{module_name.stem}:{app.__name__}",
     )
-
-
-if __name__ == "__main__":
-    start()
