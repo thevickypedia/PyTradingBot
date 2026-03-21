@@ -38,6 +38,18 @@ pytradingbot start
 
 > Use `pytradingbot --help` for usage instructions.
 
+## Containerized
+
+**Build**
+```shell
+docker build -t pytradingbot .
+```
+
+**Run**
+```shell
+docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
+```
+
 ## [Release Notes][release-notes]
 **Requirement**
 ```shell
