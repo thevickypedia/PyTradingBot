@@ -1,7 +1,7 @@
 import asyncio
+import copy
 import warnings
 from contextlib import asynccontextmanager
-from copy import deepcopy
 from typing import List
 
 import uiauth
@@ -51,9 +51,9 @@ async def lifespan(app_: FastAPI):
     app_.state.last_scan_completed = None  # no cooldown on cold start
     app_.state.current_filters = dict(DEFAULT_FILTERS)
     app_.state.scan_lock = asyncio.Lock()
-    app_.state.scan_source = "manual"
+    app_.state.scan_source = None
     app_.state.last_scheduler_minute = None
-    app_.state.schedule_config = storage.load_schedule() or deepcopy(DEFAULT_SCHEDULE)
+    app_.state.schedule_config = storage.load_schedule() or copy.deepcopy(DEFAULT_SCHEDULE)
 
     app_.state.scheduler = ScanScheduler(app_, trigger_scan=run_scan_job)
     app_.state.scheduler.start()
