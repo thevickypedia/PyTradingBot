@@ -18,6 +18,23 @@ def _parse_hhmm(value: str) -> int:
     return (hour * 60) + minute
 
 
+def _window_contains(now_minutes: int, start: int, end: int) -> tuple[bool, int | None]:
+    """Return whether *now_minutes* falls inside the window and its minute offset from start."""
+    if start == end:
+        return False, None
+    if start < end:
+        if start <= now_minutes < end:
+            return True, now_minutes - start
+        return False, None
+
+    # Overnight window, e.g. 21:35 -> 04:00
+    if now_minutes >= start:
+        return True, now_minutes - start
+    if now_minutes < end:
+        return True, (1440 - start) + now_minutes
+    return False, None
+
+
 def should_run_now(schedule: dict, now_est: datetime) -> bool:
     """Return True when the current EST minute matches any enabled schedule rule."""
     if now_est.weekday() >= 5:  # skip weekends
@@ -37,7 +54,9 @@ def should_run_now(schedule: dict, now_est: datetime) -> bool:
 
         if interval <= 0:
             continue
-        if start <= now_minutes < end and (now_minutes - start) % interval == 0:
+
+        is_active, minute_offset = _window_contains(now_minutes, start, end)
+        if is_active and minute_offset is not None and minute_offset % interval == 0:
             return True
 
     after_hours = schedule.get("after_hours", {})

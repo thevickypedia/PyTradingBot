@@ -82,8 +82,8 @@ def _normalize_schedule(payload: ScheduleRequest) -> dict:
         interval_minutes = int(window.get("interval_minutes", default_window["interval_minutes"]))
         if interval_minutes <= 0 or interval_minutes > 240:
             raise ValueError(f"Interval for {window_id} must be between 1 and 240 minutes.")
-        if start >= end:
-            raise ValueError(f"Start must be before end for {window_id}.")
+        if start == end:
+            raise ValueError(f"Start and end cannot be the same for {window_id}.")
 
         normalized_windows.append(
             {

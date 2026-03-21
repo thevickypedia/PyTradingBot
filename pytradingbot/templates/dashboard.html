@@ -511,7 +511,7 @@
               </div>
             </div>
             <div class="ctrl-card-body">
-              <p class="schedule-note">Scheduler checks every minute bucket and runs scans in the background based on this schedule.</p>
+              <p class="schedule-note">Scheduler checks every minute bucket and runs scans in the background based on this schedule. If an end time is earlier than its start time, that session continues past midnight into the next day.</p>
 
               <div class="custom-control custom-switch mb-3">
                 <input type="checkbox" class="custom-control-input" id="scheduleEnabled">
@@ -914,6 +914,29 @@ function collectScheduleForm () {
   };
 }
 
+function validateSchedulePayload (payload) {
+  for (const window of (payload.windows || [])) {
+    if (!window.start || !window.end) {
+      return `Start and end are required for ${window.id}.`;
+    }
+    if (window.start === window.end) {
+      return `Start and end cannot be the same for ${window.id}.`;
+    }
+    if (!Number.isFinite(window.interval_minutes) || window.interval_minutes < 1 || window.interval_minutes > 240) {
+      return `Interval for ${window.id} must be between 1 and 240 minutes.`;
+    }
+  }
+
+  if (!payload.after_hours.run_time || !payload.after_hours.close) {
+    return 'After Hours run time and close time are required.';
+  }
+  if (payload.after_hours.run_time >= payload.after_hours.close) {
+    return 'After Hours run time must be before close.';
+  }
+
+  return null;
+}
+
 function loadSchedule () {
   fetch('/schedule')
     .then(r => r.json())
@@ -928,6 +951,12 @@ function loadSchedule () {
 
 function saveSchedule () {
   const payload = collectScheduleForm();
+  const validationError = validateSchedulePayload(payload);
+  if (validationError) {
+    document.getElementById('scheduleStatus').textContent = `Save failed: ${validationError}`;
+    return;
+  }
+
   fetch('/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
