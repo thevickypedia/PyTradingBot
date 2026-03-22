@@ -66,6 +66,12 @@ docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
 - **TELEGRAM_BOT_TOKEN**: Telegram bot token to notify the user.
 - **TELEGRAM_CHAT_IDS**: Comma separated list of chat IDs to notify.
 
+> To get the chat ID, message the bot on Telegram and run the command:
+> ```shell
+> curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates" \
+> | jq '.result[].message.chat.id'
+> ```
+
 ### Background Scheduler
 
 The API runs a background async scheduler that triggers scans automatically (EST) and stores each run in the existing shelve DB.
@@ -120,7 +126,7 @@ Licensed under the [MIT License][license]
 
 [license]: https://github.com/thevickypedia/PyTradingBot/blob/main/LICENSE
 [label-pypi-package]: https://img.shields.io/badge/Pypi%20Package-PyTradingBot-blue?style=for-the-badge&logo=Python
-[label-pyversion]: https://img.shields.io/badge/python-3.10%20%7C%203.11-blue
+[label-pyversion]: https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue
 [label-platform]: https://img.shields.io/badge/Platform-Linux|macOS|Windows-1f425f.svg
 [label-actions-pypi]: https://github.com/thevickypedia/PyTradingBot/actions/workflows/python-publish.yml/badge.svg
 [label-pypi]: https://img.shields.io/pypi/v/PyTradingBot

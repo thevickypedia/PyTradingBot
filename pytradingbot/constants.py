@@ -56,7 +56,8 @@ class Env:
     assert (
         LOG_LEVEL in _approved_log_levels
     ), f"Invalid LOG_LEVEL value, must be one of {', '.join(_approved_log_levels)}"
-    LOGS_DIR: pathlib.Path = pathlib.Path(getenv("LOGS_DIR", default="logs"))
+    LOGS_DIR: pathlib.Path = pathlib.Path(getenv("logs_dir", default="logs"))
+    DB_DIR: pathlib.Path = pathlib.Path(getenv("db_dir", "data_dir", default="data"))
 
     # Users may not trigger a new scan within this window after the last one completed.
     SCAN_COOLDOWN_SECONDS: int = int(getenv("scan_cooldown_seconds", default="60"))
@@ -68,7 +69,9 @@ class Env:
     TELEGRAM_BOT_TOKEN: str = getenv("telegram_bot_token", "telegram_token", "bot_token")
     TELEGRAM_CHAT_IDS: List[int] = [
         int(chat_id.strip())
-        for chat_id in (getenv("telegram_chat_ids", "chat_ids") or "").split(",")
+        for chat_id in (
+            getenv("telegram_chat_ids", "chat_ids", "telegram_chat_id", "chat_id", "bot_chat_ids", "bot_chat_id") or ""
+        ).split(",")
         if chat_id.strip().isdigit()
     ]
 
@@ -114,8 +117,7 @@ class Config:
     TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
 
     # Datastore
-    DB_DIR: pathlib.Path = pathlib.Path("data")
-    DB_PATH: str = str(DB_DIR / "scan_history")
+    DB_PATH: str = str(Env.DB_DIR / "scan_history")
     DB_INDEX_KEY: str = "__index__"
     DB_SCHEDULE_KEY: str = "__schedule__"
 

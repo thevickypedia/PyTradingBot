@@ -1,0 +1,16 @@
+services:
+  pytradingbot:
+    image: pytradingbot
+    container_name: pytradingbot
+    ports:
+      - "5005:5005"
+    env_file:
+      - .env
+    environment:
+      - PORT=5005
+      - DATA_DIR=/data
+      - LOGS_DIR=/logs
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    restart: unless-stopped

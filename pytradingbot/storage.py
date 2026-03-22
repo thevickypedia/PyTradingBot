@@ -14,10 +14,7 @@ import copy
 import shelve
 from typing import Dict, List, Optional
 
-from pytradingbot.constants import (
-    LOGGER,
-    Config,
-)
+from pytradingbot.constants import LOGGER, Config, Env
 
 
 def save_scan(timestamp: str, data: list) -> None:
@@ -26,7 +23,7 @@ def save_scan(timestamp: str, data: list) -> None:
     An ``__index__`` list is maintained so that insertion order is preserved
     regardless of the underlying dbm backend's key ordering.
     """
-    Config.DB_DIR.mkdir(parents=True, exist_ok=True)
+    Env.DB_DIR.mkdir(parents=True, exist_ok=True)
     LOGGER.debug("Saving scan snapshot for %s with %d records.", timestamp, len(data))
     with shelve.open(Config.DB_PATH) as db:
         db[timestamp] = data
@@ -99,7 +96,7 @@ def load_schedule() -> dict:
 
 def save_schedule(schedule: dict) -> None:
     """Persist scheduler config."""
-    Config.DB_DIR.mkdir(parents=True, exist_ok=True)
+    Env.DB_DIR.mkdir(parents=True, exist_ok=True)
     LOGGER.debug("Saving schedule configuration. enabled=%s", schedule.get("enabled", True))
     with shelve.open(Config.DB_PATH) as db:
         db[Config.DB_SCHEDULE_KEY] = schedule

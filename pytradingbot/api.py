@@ -79,12 +79,6 @@ def get_routes() -> List[APIRoute]:
     LOGGER.debug("Building API route table.")
     return [
         APIRoute(
-            path="/health",
-            endpoint=lambda: {"status": "ok"},
-            methods=["GET"],
-            include_in_schema=False,
-        ),
-        APIRoute(
             path="/",
             endpoint=dashboard,
             methods=["GET"],
@@ -153,9 +147,20 @@ else:
         "USERNAME and PASSWORD are not set. API endpoints are unprotected.",
         UserWarning,
     )
-    app.routes.extend(get_routes())
+    app.routes.extend(api_routes)
     LOGGER.debug("Routes attached directly to app without auth wrapper.")
+app.routes.append(
+    APIRoute(
+        path="/health",
+        endpoint=lambda: {"status": "ok"},
+        methods=["GET"],
+        include_in_schema=False,
+    )
+)
 
 # TODO:
+#   Filter health check logging
+#   Outside docker -> scan_history.db
+#   Inside docker -> scan_history and an error message "BDB0210 /data/scan_history.db: metadata page checksum error"
 #   Extend Telegram support to score an individual ticker
 #   Include multiple candlestick trackers using webull, Alpha Vantage etc
