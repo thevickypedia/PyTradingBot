@@ -3,6 +3,7 @@ import copy
 import re
 import time
 from datetime import datetime
+from typing import Any, Dict
 
 import uiauth
 from fastapi import FastAPI, Request
@@ -10,28 +11,27 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from pytradingbot import storage
-from pytradingbot.constants import (
-    DEFAULT_FILTERS,
-    DEFAULT_SCHEDULE,
-    LOGGER,
-    LOGS_DIR,
-    PASSWORD,
-    SCAN_COOLDOWN_SECONDS,
-    USERNAME,
-    ScanStatus,
-)
+from pytradingbot.constants import LOGGER, Config, Env, ScanStatus
 from pytradingbot.main import builder, get_signals, jsonify_scan_data
 from pytradingbot.telegram import send_telegram_message
 
 
 class ScanRequest(BaseModel):
-    """Scan Request model."""
+    """Scan Request model.
+
+    >>> ScanRequest
+
+    """
 
     filters: dict | None = None
 
 
 class ScheduleRequest(BaseModel):
-    """Schedule override payload."""
+    """Schedule override payload.
+
+    >>> ScheduleRequest
+
+    """
 
     enabled: bool = True
     windows: list[dict] = Field(default_factory=list)
@@ -39,31 +39,55 @@ class ScheduleRequest(BaseModel):
 
 
 def _cooldown_remaining(request: Request) -> int:
-    """Seconds left in the post-scan cooldown (0 means free to scan)."""
+    """Seconds left in the post-scan cooldown (0 means free to scan).
+
+    Args:
+        request: FastAPI request object, used to access app state for last scan completion time.
+
+    Returns:
+        int:
+        Time in seconds left in the post-scan cooldown.
+    """
     last: datetime | None = getattr(request.app.state, "last_scan_completed", None)
     if last is None:
         LOGGER.debug("Cooldown check for request returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    remaining = max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(Env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("Cooldown check for request returned %s seconds remaining.", remaining)
     return remaining
 
 
 def _cooldown_remaining_app(app: FastAPI) -> int:
-    """Cooldown remain in app state."""
+    """Cooldown remain in app state.
+
+    Args:
+        app: FastAPI app object, used to access app state for last scan completion time.
+
+    Returns:
+        int:
+        Time in seconds left in the post-scan cooldown.
+    """
     last: datetime | None = getattr(app.state, "last_scan_completed", None)
     if last is None:
         LOGGER.debug("App cooldown check returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    remaining = max(0, int(SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(Env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("App cooldown check returned %s seconds remaining.", remaining)
     return remaining
 
 
 def _validate_time(value: str) -> str:
-    """Validate time format."""
+    """Validate time format.
+
+    Args:
+        value: Time string in HH:MM 24-hour format.
+
+    Returns:
+        str:
+        Time string in HH:MM 24-hour format.
+    """
     if not isinstance(value, str) or not re.fullmatch(r"\d{2}:\d{2}", value):
         raise ValueError("Time must be in HH:MM 24-hour format.")
     hour, minute = value.split(":", maxsplit=1)
@@ -74,10 +98,18 @@ def _validate_time(value: str) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def _normalize_schedule(payload: ScheduleRequest) -> dict:
-    """Normalize schedule payload."""
+def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
+    """Normalize schedule payload.
+
+    Args:
+        payload: ScheduleRequest object.
+
+    Returns:
+        Dict[str, Any]:
+        Normalized schedule payload.
+    """
     LOGGER.debug("Normalizing schedule payload. enabled=%s windows=%d", payload.enabled, len(payload.windows))
-    defaults = copy.deepcopy(DEFAULT_SCHEDULE)
+    defaults = copy.deepcopy(Config.DEFAULT_SCHEDULE)
     ordered_ids = [window["id"] for window in defaults["windows"]]
     windows_by_id = {window["id"]: window for window in defaults["windows"]}
 
@@ -148,9 +180,14 @@ def _render(
 ) -> HTMLResponse:
     """Render the dashboard template.
 
-    When *version_ts* / *version_data* are supplied the template shows that
-    historical snapshot.  The live scan-status badge always reflects the real
-    current state from ``app.state``.
+    Args:
+        request: FastAPI Request object.
+        version_ts: Version timestamp.
+        version_data: Version data.
+
+    Returns:
+        HTMLResponse:
+        Returns HTML response with rendered dashboard template.
     """
     viewing_version = version_ts is not None and version_data is not None
     LOGGER.debug("Rendering dashboard. viewing_version=%s version_ts=%s", viewing_version, version_ts)
@@ -170,23 +207,34 @@ def _render(
         "timestamp": displayed_timestamp,
         "scan_status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
         "scan_error": getattr(request.app.state, "scan_error", None),
-        "filters": getattr(request.app.state, "current_filters", dict(DEFAULT_FILTERS)),
-        "default_filters": dict(DEFAULT_FILTERS),
-        "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(DEFAULT_SCHEDULE)),
-        "default_schedule": copy.deepcopy(DEFAULT_SCHEDULE),
+        "filters": getattr(request.app.state, "current_filters", dict(Config.DEFAULT_FILTERS)),
+        "default_filters": dict(Config.DEFAULT_FILTERS),
+        "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(Config.DEFAULT_SCHEDULE)),
+        "default_schedule": copy.deepcopy(Config.DEFAULT_SCHEDULE),
         "cooldown_remaining": _cooldown_remaining(request),
-        "cooldown_seconds": SCAN_COOLDOWN_SECONDS,
+        "cooldown_seconds": Env.SCAN_COOLDOWN_SECONDS,
         "current_version": current_version,
     }
 
-    if USERNAME and PASSWORD:
+    if Env.USERNAME and Env.PASSWORD:
         args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
 
     return request.app.state.templates.TemplateResponse("dashboard.html", args)
 
 
 async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypass_cooldown: bool = False) -> bool:
-    """Queue one background scan and update app state when it finishes."""
+    """Queue one background scan and update app state when it finishes.
+
+    Args:
+        app: FastAPI instance.
+        filters: Filters to apply for finviz.
+        source: Source of the scan. Either manual or scheduler.
+        bypass_cooldown: Boolean flag to bypass cooldown.
+
+    Returns:
+        bool:
+        Boolean flag to indicate if scan was finished or not.
+    """
     lock: asyncio.Lock = app.state.scan_lock
     async with lock:
         if getattr(app.state, "scan_status", ScanStatus.IDLE) == ScanStatus.RUNNING:
@@ -245,7 +293,15 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
 
 
 def dashboard(request: Request) -> HTMLResponse:
-    """Render the dashboard, optionally at a historical *?version=* snapshot."""
+    """Render the dashboard, optionally at a historical *?version=* snapshot.
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        HTMLResponse:
+        Returns HTML response with rendered dashboard template.
+    """
     version = request.query_params.get("version")
     LOGGER.debug("Dashboard requested. version=%s", version)
     if version:
@@ -258,7 +314,16 @@ def dashboard(request: Request) -> HTMLResponse:
 
 
 async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
-    """Start a background scan.  Enforces a 60-second post-scan cooldown."""
+    """Start a background scan.  Enforces a 60-second post-scan cooldown.
+
+    Args:
+        request: FastAPI request object.
+        body: ScanRequest object.
+
+    Returns:
+        JSONResponse:
+        JSON response to indicate the status of the scan request.
+    """
     LOGGER.debug("Manual scan requested through API.")
     remaining = _cooldown_remaining(request)
     if remaining > 0:
@@ -278,7 +343,15 @@ async def start_scan(request: Request, body: ScanRequest) -> JSONResponse:
 
 
 def scan_status(request: Request) -> JSONResponse:
-    """Poll endpoint: returns current status, result count, timestamp, and cooldown."""
+    """Poll endpoint: returns current status, result count, timestamp, and cooldown.
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        JSONResponse:
+        JSON response to indicate the status of the scan request.
+    """
     LOGGER.debug(
         "Scan status requested. status=%s source=%s timestamp=%s",
         getattr(request.app.state, "scan_status", ScanStatus.IDLE),
@@ -302,14 +375,23 @@ def get_schedule(request: Request) -> JSONResponse:
     LOGGER.debug("Schedule configuration requested.")
     return JSONResponse(
         {
-            "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(DEFAULT_SCHEDULE)),
-            "defaults": copy.deepcopy(DEFAULT_SCHEDULE),
+            "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(Config.DEFAULT_SCHEDULE)),
+            "defaults": copy.deepcopy(Config.DEFAULT_SCHEDULE),
         }
     )
 
 
 def update_schedule(request: Request, body: ScheduleRequest) -> JSONResponse:
-    """Persist scheduler configuration override."""
+    """Persist scheduler configuration override.
+
+    Args:
+        request: FastAPI request object.
+        body: ScheduleRequest object.
+
+    Returns:
+        JSONResponse:
+        JSON response to indicate the status of the scan request.
+    """
     LOGGER.debug("Schedule update requested.")
     try:
         normalized = _normalize_schedule(body)
@@ -324,7 +406,12 @@ def update_schedule(request: Request, body: ScheduleRequest) -> JSONResponse:
 
 
 def get_versions() -> JSONResponse:
-    """Return all stored scan snapshots newest-first as ``[{timestamp, count}]``."""
+    """Return all stored scan snapshots newest-first as ``[{timestamp, count}]``.
+
+    Returns:
+        JSONResponse:
+        JSON response with all stored scan snapshots as a list of objects with timestamp and count.
+    """
     versions = storage.list_versions()
     LOGGER.debug("Returning %d stored scan versions.", len(versions))
     if not versions:
@@ -333,12 +420,20 @@ def get_versions() -> JSONResponse:
 
 
 def get_logs(request: Request) -> JSONResponse:
-    """Return logs for a selected file, with optional file-list metadata."""
+    """Return logs for a selected file, with optional file-list metadata.
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        JSONResponse:
+        JSON response to indicate the status of the scan request.
+    """
     include_all = request.query_params.get("all", "").lower() in {"1", "true", "yes"}
     requested_name = request.query_params.get("filename")
 
     LOGGER.debug("Log viewer requested logs. include_all=%s filename=%s", include_all, requested_name)
-    files = sorted(LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if LOGS_DIR.exists() else []
+    files = sorted(Env.LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if Env.LOGS_DIR.exists() else []
     file_names = [file.name for file in files]
 
     if not files:

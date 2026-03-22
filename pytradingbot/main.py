@@ -7,11 +7,19 @@ from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
-from pytradingbot.constants import DEFAULT_FILTERS, LOGGER
+from pytradingbot.constants import LOGGER, Config
 
 
 def enrich_ticker(ticker: str) -> pd.Series:
-    """Enrich ticker with latest candle data."""
+    """Enrich ticker with latest candle data.
+
+    Args:
+        ticker: Ticker to enrich.
+
+    Returns:
+        pd.Series:
+        Series with latest news and insider action.
+    """
     try:
         stock = finvizfinance(ticker)
         news = stock.ticker_news()
@@ -27,7 +35,20 @@ def enrich_ticker(ticker: str) -> pd.Series:
 
 
 def get_candle_signal(ticker: str) -> pd.Series:
-    """Uses yfinance 5min candles for full signal analysis."""
+    """Uses yfinance 5min candles for full signal analysis.
+
+    See Also:
+        Technical Analysis - EMA Crossover: Strategy based on short-term vs long-term EMA crossovers.
+        Candlestick Analysis: Price action method using OHLC data to determine trend and momentum.
+        Volume Analysis: Confirms strength of price moves using volume spikes.
+
+    Args:
+        ticker: Ticker to use.
+
+    Returns:
+        pd.Series:
+        Series with latest candle data.
+    """
     try:
         df = yf.download(ticker, period="1d", interval="5m", progress=False)
 
@@ -106,7 +127,15 @@ def get_candle_signal(ticker: str) -> pd.Series:
 
 
 def score_stock(row: pd.Series) -> int:
-    """Assign scoring based on volume, momentum, RSI, insider action and candles."""
+    """Assign scoring based on volume, momentum, RSI, insider action and candles.
+
+    Args:
+        row: DataFrame row with necessary columns for scoring.
+
+    Returns:
+        int:
+        Score based on volume, momentum, RSI, insider action.
+    """
     score = 0
 
     # Volume conviction (max 30 pts)
@@ -151,7 +180,18 @@ def score_stock(row: pd.Series) -> int:
 
 
 def get_signals(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
-    """Derive strong buy/sell signals from the enriched dataframe."""
+    """Derive strong buy/sell signals from the enriched dataframe.
+
+    See Also:
+        If there are no strong buy/sell signals, a fallback is returned with the top 2 highest and lowest scored stocks.
+
+    Args:
+        df: DataFrame with enriched data.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame, bool]:
+        Tuple of dataframes with strong buy/sell signals, and a fallback boolean flag.
+    """
     # Strong Buy
     strong_buy = df[
         (df["TD_Signal"] == "STRONG BUY")
@@ -180,7 +220,15 @@ def get_signals(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
 
 
 def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Convert dataframe to list of dicts with NaN as None for JSON rendering."""
+    """Convert dataframe to list of dicts with NaN as None for JSON rendering.
+
+    Args:
+        df: DataFrame with enriched data.
+
+    Returns:
+        List[Dict[str, Any]]:
+        A list of dicts with NaN as None for JSON rendering.
+    """
     records = df.to_dict(orient="records")
 
     # Replace float NaN with None for safe Jinja2 / JSON rendering.
@@ -196,9 +244,18 @@ def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
 
 
 def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
-    """Build a dataframe from the raw data."""
+    """Build a dataframe from the raw data.
+
+    Args:
+        filepath: Filepath to store the enriched data.
+        filters: Filters to apply for finviz.
+
+    Returns:
+        pd.DataFrame:
+        DataFrame with enriched data.
+    """
     # Use caller-supplied filters or fall back to module-level defaults
-    _filters = filters or DEFAULT_FILTERS
+    _filters = filters or Config.DEFAULT_FILTERS
 
     LOGGER.info(f"Starting scan with filters: {_filters}")
 

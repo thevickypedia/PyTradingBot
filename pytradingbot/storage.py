@@ -15,12 +15,8 @@ import shelve
 from typing import Dict, List, Optional
 
 from pytradingbot.constants import (
-    DB_DIR,
-    DB_INDEX_KEY,
-    DB_PATH,
-    DB_SCHEDULE_KEY,
-    DEFAULT_SCHEDULE,
     LOGGER,
+    Config,
 )
 
 
@@ -30,14 +26,14 @@ def save_scan(timestamp: str, data: list) -> None:
     An ``__index__`` list is maintained so that insertion order is preserved
     regardless of the underlying dbm backend's key ordering.
     """
-    DB_DIR.mkdir(parents=True, exist_ok=True)
+    Config.DB_DIR.mkdir(parents=True, exist_ok=True)
     LOGGER.debug("Saving scan snapshot for %s with %d records.", timestamp, len(data))
-    with shelve.open(DB_PATH) as db:
+    with shelve.open(Config.DB_PATH) as db:
         db[timestamp] = data
-        index: list[str] = list(db.get(DB_INDEX_KEY, []))
+        index: list[str] = list(db.get(Config.DB_INDEX_KEY, []))
         if timestamp not in index:
             index.append(timestamp)
-        db[DB_INDEX_KEY] = index
+        db[Config.DB_INDEX_KEY] = index
     LOGGER.info("Saved scan snapshot for %s.", timestamp)
 
 
@@ -47,8 +43,8 @@ def list_versions() -> List[Dict[str, int]]:
     Safe to call even if the DB does not exist yet (returns ``[]``).
     """
     try:
-        with shelve.open(DB_PATH) as db:
-            index: list[str] = list(db.get(DB_INDEX_KEY, []))
+        with shelve.open(Config.DB_PATH) as db:
+            index: list[str] = list(db.get(Config.DB_INDEX_KEY, []))
             return [{"timestamp": ts, "count": len(db.get(ts, []))} for ts in reversed(index)]
     except Exception as error:
         LOGGER.error("Failed to list versions: %s", error)
@@ -58,7 +54,7 @@ def list_versions() -> List[Dict[str, int]]:
 def load_version(timestamp: str) -> Optional[list]:
     """Return scan data for *timestamp*, or ``None`` if not found."""
     try:
-        with shelve.open(DB_PATH) as db:
+        with shelve.open(Config.DB_PATH) as db:
             version = db.get(timestamp)
             if version is None:
                 LOGGER.warning("Requested scan version %s was not found in storage.", timestamp)
@@ -76,8 +72,8 @@ def latest_version() -> tuple[Optional[str], list]:
     Used at server startup to pre-populate ``app.state`` from the last saved run.
     """
     try:
-        with shelve.open(DB_PATH) as db:
-            index: list[str] = list(db.get(DB_INDEX_KEY, []))
+        with shelve.open(Config.DB_PATH) as db:
+            index: list[str] = list(db.get(Config.DB_INDEX_KEY, []))
             if not index:
                 return None, []
             key = index[-1]  # last appended = most recent
@@ -90,21 +86,21 @@ def latest_version() -> tuple[Optional[str], list]:
 def load_schedule() -> dict:
     """Return persisted scheduler config, or module defaults when unset/invalid."""
     try:
-        with shelve.open(DB_PATH) as db:
-            stored = db.get(DB_SCHEDULE_KEY)
+        with shelve.open(Config.DB_PATH) as db:
+            stored = db.get(Config.DB_SCHEDULE_KEY)
             if isinstance(stored, dict):
                 LOGGER.info("Loaded persisted schedule configuration from storage.")
                 return stored
             LOGGER.warning("No persisted schedule configuration found; using defaults.")
     except Exception as error:
         LOGGER.error("Failed to load schedule config: %s", error)
-    return copy.deepcopy(DEFAULT_SCHEDULE)
+    return copy.deepcopy(Config.DEFAULT_SCHEDULE)
 
 
 def save_schedule(schedule: dict) -> None:
     """Persist scheduler config."""
-    DB_DIR.mkdir(parents=True, exist_ok=True)
+    Config.DB_DIR.mkdir(parents=True, exist_ok=True)
     LOGGER.debug("Saving schedule configuration. enabled=%s", schedule.get("enabled", True))
-    with shelve.open(DB_PATH) as db:
-        db[DB_SCHEDULE_KEY] = schedule
+    with shelve.open(Config.DB_PATH) as db:
+        db[Config.DB_SCHEDULE_KEY] = schedule
     LOGGER.info("Saved schedule configuration to storage.")

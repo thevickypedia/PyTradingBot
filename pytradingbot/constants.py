@@ -3,15 +3,15 @@ import os
 import pathlib
 from datetime import datetime
 from enum import StrEnum
+from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 
 class ScanStatus(StrEnum):
     """Lifecycle states for a stock scan.
 
-    Inherits from ``str`` so values compare equal to plain string literals —
-    Jinja2 ``{% if scan_status == 'done' %}`` and JS ``=== 'done'`` both work
-    without any template changes.
+    >>> ScanStatus
+
     """
 
     IDLE = "idle"
@@ -20,39 +20,68 @@ class ScanStatus(StrEnum):
     ERROR = "error"
 
 
-LOGS_DIR = pathlib.Path("logs")
-os.makedirs(LOGS_DIR, exist_ok=True)
+def getenv(*args, default: str = None) -> str | None:
+    """Get an environment variable.
+
+    Args:
+        *args: One or more possible environment variable names to check (case-insensitive).
+        default: Default value to return if environment variable is not set.
+
+    Returns:
+        str:
+        Environment variable or default value if environment variable is not set.
+    """
+    keys = [key.upper() for key in args] + [k.lower() for k in args]
+    for key in keys:
+        if val := os.getenv(key):
+            return val
+    return default
+
 
 # Environment variables with defaults
 _approved_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-LOG_LEVEL = (os.getenv("LOG_LEVEL") or os.getenv("log_level") or "DEBUG").upper()
-assert LOG_LEVEL in _approved_log_levels, f"Invalid LOG_LEVEL value, must be one of {', '.join(_approved_log_levels)}"
 
-# API Starter pack
-HOST = os.getenv("HOST") or os.getenv("host") or "0.0.0.0"
-PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")
 
-# Users may not trigger a new scan within this window after the last one completed.
-SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv("scan_cooldown_seconds") or 60)
+class Env:
+    """Environment variables for pytradingbot.
 
-# Credentials
-USERNAME = os.getenv("USERNAME") or os.getenv("username") or os.getenv("USER") or os.getenv("user")
-PASSWORD = os.getenv("PASSWORD") or os.getenv("password") or os.getenv("PASS") or os.getenv("pass")
+    >>> Env
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("telegram_bot_token")
-TELEGRAM_CHAT_IDS = [
-    int(chat_id.strip())
-    for chat_id in (os.getenv("TELEGRAM_CHAT_IDS") or os.getenv("telegram_chat_ids") or "").split(",")
-    if chat_id.strip().isdigit()
-]
+    """
+
+    # API Starter pack
+    HOST: str = getenv("host", default="0.0.0.0")
+    PORT: int = int(getenv("port", default="8080"))
+    LOG_LEVEL: str = getenv("log_level", default="INFO").upper()
+    assert (
+        LOG_LEVEL in _approved_log_levels
+    ), f"Invalid LOG_LEVEL value, must be one of {', '.join(_approved_log_levels)}"
+    LOGS_DIR: pathlib.Path = pathlib.Path(getenv("LOGS_DIR", default="logs"))
+
+    # Users may not trigger a new scan within this window after the last one completed.
+    SCAN_COOLDOWN_SECONDS: int = int(getenv("scan_cooldown_seconds", default="60"))
+
+    # Credentials
+    USERNAME: str = getenv("username", "user")
+    PASSWORD: str = getenv("password", "pass")
+
+    TELEGRAM_BOT_TOKEN: str = getenv("telegram_bot_token", "telegram_token", "bot_token")
+    TELEGRAM_CHAT_IDS: List[int] = [
+        int(chat_id.strip())
+        for chat_id in (getenv("telegram_chat_ids", "chat_ids") or "").split(",")
+        if chat_id.strip().isdigit()
+    ]
+
+
+os.makedirs(Env.LOGS_DIR, exist_ok=True)
 
 LOGGER = logging.getLogger("pytradingbot")
-LOGGER.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
+LOGGER.setLevel(getattr(logging, Env.LOG_LEVEL, logging.DEBUG))
 handler = logging.FileHandler(
-    filename=str(LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
+    filename=str(Env.LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
-handler.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
+handler.setLevel(getattr(logging, Env.LOG_LEVEL, logging.DEBUG))
 handler.setFormatter(
     fmt=logging.Formatter(
         datefmt="%b-%d-%Y %I:%M:%S %p",
@@ -63,62 +92,70 @@ if not LOGGER.handlers:
     LOGGER.addHandler(hdlr=handler)
 LOGGER.propagate = False
 
-DEFAULT_FILTERS = {
-    "Exchange": "NASDAQ",
-    "Country": "USA",
-    "Average Volume": "Over 500K",
-    "Price": "Under $50",
-    "Relative Volume": "Over 2",
-    "Gap": "Up",
-    "Change": "Up 5%",
-    "RSI (14)": "Not Overbought (<60)",
-}
 
-TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
+class Config:
+    """Configuration class for pytradingbot.
 
-# Datastore
-DB_DIR = pathlib.Path("data")
-DB_PATH = str(DB_DIR / "scan_history")
-DB_INDEX_KEY = "__index__"
-DB_SCHEDULE_KEY = "__schedule__"
+    >>> Config
 
-# Scheduler defaults (all times are interpreted in America/New_York)
-MARKET_TIMEZONE = ZoneInfo("America/New_York")
-DEFAULT_SCHEDULE = {
-    "enabled": True,
-    "windows": [
-        {
-            "id": "pre_market",
-            "label": "Pre-Market",
-            "start": "04:00",
-            "end": "09:30",
-            "interval_minutes": 15,
-            "enabled": True,
-        },
-        {
-            "id": "market_open",
-            "label": "Market Open",
-            "start": "09:30",
-            "end": "10:30",
-            "interval_minutes": 5,
-            "enabled": True,
-        },
-        {
-            "id": "mid_day",
-            "label": "Mid Day",
-            "start": "10:30",
-            "end": "14:00",
-            "interval_minutes": 30,
-            "enabled": True,
-        },
-        {
-            "id": "power_hour",
-            "label": "Power Hour",
-            "start": "14:00",
-            "end": "16:00",
-            "interval_minutes": 5,
-            "enabled": True,
-        },
-    ],
-    "after_hours": {"enabled": True, "run_time": "16:15", "close": "20:00"},
-}
+    """
+
+    DEFAULT_FILTERS: Dict[str, str] = {
+        "Exchange": "NASDAQ",
+        "Country": "USA",
+        "Average Volume": "Over 500K",
+        "Price": "Under $50",
+        "Relative Volume": "Over 2",
+        "Gap": "Up",
+        "Change": "Up 5%",
+        "RSI (14)": "Not Overbought (<60)",
+    }
+
+    TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
+
+    # Datastore
+    DB_DIR: pathlib.Path = pathlib.Path("data")
+    DB_PATH: str = str(DB_DIR / "scan_history")
+    DB_INDEX_KEY: str = "__index__"
+    DB_SCHEDULE_KEY: str = "__schedule__"
+
+    # Scheduler defaults (all times are interpreted in America/New_York)
+    MARKET_TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
+    DEFAULT_SCHEDULE: Dict[str, Any] = {
+        "enabled": True,
+        "windows": [
+            {
+                "id": "pre_market",
+                "label": "Pre-Market",
+                "start": "04:00",
+                "end": "09:30",
+                "interval_minutes": 15,
+                "enabled": True,
+            },
+            {
+                "id": "market_open",
+                "label": "Market Open",
+                "start": "09:30",
+                "end": "10:30",
+                "interval_minutes": 5,
+                "enabled": True,
+            },
+            {
+                "id": "mid_day",
+                "label": "Mid Day",
+                "start": "10:30",
+                "end": "14:00",
+                "interval_minutes": 30,
+                "enabled": True,
+            },
+            {
+                "id": "power_hour",
+                "label": "Power Hour",
+                "start": "14:00",
+                "end": "16:00",
+                "interval_minutes": 5,
+                "enabled": True,
+            },
+        ],
+        "after_hours": {"enabled": True, "run_time": "16:15", "close": "20:00"},
+    }
