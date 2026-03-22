@@ -4,7 +4,7 @@ from typing import Awaitable, Callable
 
 from fastapi import FastAPI
 
-from pytradingbot.constants import LOGGER, Config
+from pytradingbot.constants import LOGGER, config
 
 ScanTrigger = Callable[[FastAPI, dict, str, bool], Awaitable[bool]]
 
@@ -134,7 +134,7 @@ class ScanScheduler:
             LOGGER.debug("Scheduler tick skipped because schedule is missing or disabled.")
             return
 
-        now_est = datetime.now(Config.MARKET_TIMEZONE)
+        now_est = datetime.now(config.MARKET_TIMEZONE)
         if not should_run_now(schedule, now_est):
             LOGGER.debug("Scheduler tick found no matching window at %s.", now_est.strftime("%Y-%m-%d %H:%M"))
             return

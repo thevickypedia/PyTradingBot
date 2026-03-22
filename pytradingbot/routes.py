@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from pytradingbot import storage
-from pytradingbot.constants import LOGGER, Config, Env, ScanStatus
+from pytradingbot.constants import LOGGER, ScanStatus, config, env
 from pytradingbot.main import builder, get_signals, jsonify_scan_data
 from pytradingbot.telegram import send_telegram_message
 
@@ -53,7 +53,7 @@ def _cooldown_remaining(request: Request) -> int:
         LOGGER.debug("Cooldown check for request returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    remaining = max(0, int(Env.SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("Cooldown check for request returned %s seconds remaining.", remaining)
     return remaining
 
@@ -73,7 +73,7 @@ def _cooldown_remaining_app(app: FastAPI) -> int:
         LOGGER.debug("App cooldown check returned 0 because no scan has completed yet.")
         return 0
     elapsed = (datetime.now() - last).total_seconds()
-    remaining = max(0, int(Env.SCAN_COOLDOWN_SECONDS - elapsed))
+    remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("App cooldown check returned %s seconds remaining.", remaining)
     return remaining
 
@@ -109,7 +109,7 @@ def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
         Normalized schedule payload.
     """
     LOGGER.debug("Normalizing schedule payload. enabled=%s windows=%d", payload.enabled, len(payload.windows))
-    defaults = copy.deepcopy(Config.DEFAULT_SCHEDULE)
+    defaults = copy.deepcopy(config.DEFAULT_SCHEDULE)
     ordered_ids = [window["id"] for window in defaults["windows"]]
     windows_by_id = {window["id"]: window for window in defaults["windows"]}
 
@@ -207,16 +207,16 @@ def _render(
         "timestamp": displayed_timestamp,
         "scan_status": getattr(request.app.state, "scan_status", ScanStatus.IDLE),
         "scan_error": getattr(request.app.state, "scan_error", None),
-        "filters": getattr(request.app.state, "current_filters", dict(Config.DEFAULT_FILTERS)),
-        "default_filters": dict(Config.DEFAULT_FILTERS),
-        "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(Config.DEFAULT_SCHEDULE)),
-        "default_schedule": copy.deepcopy(Config.DEFAULT_SCHEDULE),
+        "filters": getattr(request.app.state, "current_filters", dict(config.DEFAULT_FILTERS)),
+        "default_filters": dict(config.DEFAULT_FILTERS),
+        "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(config.DEFAULT_SCHEDULE)),
+        "default_schedule": copy.deepcopy(config.DEFAULT_SCHEDULE),
         "cooldown_remaining": _cooldown_remaining(request),
-        "cooldown_seconds": Env.SCAN_COOLDOWN_SECONDS,
+        "cooldown_seconds": env.SCAN_COOLDOWN_SECONDS,
         "current_version": current_version,
     }
 
-    if Env.USERNAME and Env.PASSWORD:
+    if env.USERNAME and env.PASSWORD:
         args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
 
     return request.app.state.templates.TemplateResponse("dashboard.html", args)
@@ -375,8 +375,8 @@ def get_schedule(request: Request) -> JSONResponse:
     LOGGER.debug("Schedule configuration requested.")
     return JSONResponse(
         {
-            "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(Config.DEFAULT_SCHEDULE)),
-            "defaults": copy.deepcopy(Config.DEFAULT_SCHEDULE),
+            "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(config.DEFAULT_SCHEDULE)),
+            "defaults": copy.deepcopy(config.DEFAULT_SCHEDULE),
         }
     )
 
@@ -433,7 +433,7 @@ def get_logs(request: Request) -> JSONResponse:
     requested_name = request.query_params.get("filename")
 
     LOGGER.debug("Log viewer requested logs. include_all=%s filename=%s", include_all, requested_name)
-    files = sorted(Env.LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if Env.LOGS_DIR.exists() else []
+    files = sorted(env.LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if env.LOGS_DIR.exists() else []
     file_names = [file.name for file in files]
 
     if not files:

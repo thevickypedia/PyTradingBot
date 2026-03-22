@@ -1,8 +1,8 @@
 import requests
 
-from pytradingbot.constants import LOGGER, Env
+from pytradingbot.constants import LOGGER, env
 
-BASE_URL = f"https://api.telegram.org/bot{Env.TELEGRAM_BOT_TOKEN}"
+BASE_URL = f"https://api.telegram.org/bot{env.TELEGRAM_BOT_TOKEN}"
 
 
 async def make_request(path: str, payload: dict, retry: bool = False) -> None:
@@ -18,7 +18,7 @@ async def make_request(path: str, payload: dict, retry: bool = False) -> None:
         response = requests.post(url, json=payload)
         response.raise_for_status()
     except requests.RequestException as error:
-        error = str(error).replace(Env.TELEGRAM_BOT_TOKEN, "******")
+        error = str(error).replace(env.TELEGRAM_BOT_TOKEN, "******")
         if retry:
             LOGGER.error(f"Telegram API request failed after retry: {error}")
         else:
@@ -36,8 +36,8 @@ async def send_telegram_message(
         message: Message to be sent.
         parse_mode: Parse mode for the message.
     """
-    if all((Env.TELEGRAM_BOT_TOKEN, Env.TELEGRAM_CHAT_IDS)):
-        for chat_id in Env.TELEGRAM_CHAT_IDS:
+    if all((env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_IDS)):
+        for chat_id in env.TELEGRAM_CHAT_IDS:
             LOGGER.debug(f"Sending Telegram message to chat_id={chat_id}: {message}")
             await make_request(
                 path="sendMessage",

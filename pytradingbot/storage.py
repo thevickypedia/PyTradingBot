@@ -17,14 +17,13 @@ import json
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
-from pytradingbot.constants import LOGGER, Config, Env
+from pytradingbot.constants import LOGGER, config
 
 
 def _ensure_schema() -> None:
     """Create database schema if it doesn't exist."""
-    Env.DB_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         # Create scans table if it doesn't exist
@@ -68,7 +67,7 @@ def save_scan(timestamp: str, data: List[Dict[str, Any]]) -> None:
     _ensure_schema()
     LOGGER.debug("Saving scan snapshot for %s with %d records.", timestamp, len(data))
     try:
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         # Convert data to JSON for storage
@@ -99,7 +98,7 @@ def list_versions() -> List[Dict[str, int]]:
     """
     try:
         _ensure_schema()
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         # Get all scans ordered by timestamp descending (newest first)
@@ -133,7 +132,7 @@ def load_version(timestamp: str) -> Optional[List[Dict[str, Any]]]:
     """
     try:
         _ensure_schema()
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute("SELECT data FROM scans WHERE timestamp = ?", (timestamp,))
@@ -163,7 +162,7 @@ def latest_version() -> Tuple[Optional[str], list]:
     """
     try:
         _ensure_schema()
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         # Get the most recent scan by timestamp
@@ -191,7 +190,7 @@ def load_schedule() -> Dict[str, Any]:
     """
     try:
         _ensure_schema()
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute("SELECT config FROM schedule WHERE id = 1")
@@ -200,7 +199,7 @@ def load_schedule() -> Dict[str, Any]:
 
         if result is None:
             LOGGER.warning("No persisted schedule configuration found; using defaults.")
-            return copy.deepcopy(Config.DEFAULT_SCHEDULE)
+            return copy.deepcopy(config.DEFAULT_SCHEDULE)
 
         stored = json.loads(result[0])
         if isinstance(stored, dict):
@@ -211,7 +210,7 @@ def load_schedule() -> Dict[str, Any]:
     except Exception as error:
         LOGGER.error("Failed to load schedule config: %s", error)
 
-    return copy.deepcopy(Config.DEFAULT_SCHEDULE)
+    return copy.deepcopy(config.DEFAULT_SCHEDULE)
 
 
 def save_schedule(schedule: Dict[str, Any]) -> None:
@@ -223,7 +222,7 @@ def save_schedule(schedule: Dict[str, Any]) -> None:
     _ensure_schema()
     LOGGER.debug("Saving schedule configuration. enabled=%s", schedule.get("enabled", True))
     try:
-        conn = sqlite3.connect(Config.DB_PATH)
+        conn = sqlite3.connect(config.DB_PATH)
         cursor = conn.cursor()
 
         # Convert schedule to JSON

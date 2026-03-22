@@ -11,7 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
 from pytradingbot import storage
-from pytradingbot.constants import LOGGER, Config, Env, ScanStatus
+from pytradingbot.constants import LOGGER, ScanStatus, config, env
 from pytradingbot.routes import (
     dashboard,
     get_logs,
@@ -33,8 +33,8 @@ async def lifespan(app_: FastAPI):
     shows data immediately on restart without requiring a fresh scan.
     """
     LOGGER.debug("Starting application lifespan initialization.")
-    app_.state.templates = Jinja2Templates(directory=str(Config.TEMPLATES_DIR))
-    LOGGER.debug("Templates initialized from %s", Config.TEMPLATES_DIR)
+    app_.state.templates = Jinja2Templates(directory=str(config.TEMPLATES_DIR))
+    LOGGER.debug("Templates initialized from %s", config.TEMPLATES_DIR)
 
     # Pre-populate from the last saved scan (if any)
     latest_ts, latest_data = storage.latest_version()
@@ -43,11 +43,11 @@ async def lifespan(app_: FastAPI):
     app_.state.scan_status = ScanStatus.DONE if latest_data else ScanStatus.IDLE
     app_.state.scan_error = None
     app_.state.last_scan_completed = None  # no cooldown on cold start
-    app_.state.current_filters = dict(Config.DEFAULT_FILTERS)
+    app_.state.current_filters = dict(config.DEFAULT_FILTERS)
     app_.state.scan_lock = asyncio.Lock()
     app_.state.scan_source = None
     app_.state.last_scheduler_minute = None
-    app_.state.schedule_config = storage.load_schedule() or copy.deepcopy(Config.DEFAULT_SCHEDULE)
+    app_.state.schedule_config = storage.load_schedule() or copy.deepcopy(config.DEFAULT_SCHEDULE)
     LOGGER.debug(
         "App state primed. last_scan_ts=%s scan_status=%s schedule_enabled=%s",
         latest_ts,
@@ -133,12 +133,12 @@ def get_routes() -> List[APIRoute]:
 app = FastAPI(title="Trading Bot Dashboard", lifespan=lifespan)
 app.__name__ = "app"
 api_routes = get_routes()
-if all((Env.USERNAME, Env.PASSWORD)):
+if all((env.USERNAME, env.PASSWORD)):
     LOGGER.info("UI auth is enabled for protected routes.")
     uiauth.protect(
         app=app,
-        username=Env.USERNAME,
-        password=Env.PASSWORD,
+        username=env.USERNAME,
+        password=env.PASSWORD,
         routes=api_routes,
     )
 else:

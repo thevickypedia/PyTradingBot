@@ -76,15 +76,18 @@ class Env:
     ]
 
 
-os.makedirs(Env.LOGS_DIR, exist_ok=True)
+env = Env()
+
+env.DB_DIR.mkdir(parents=True, exist_ok=True)
+env.LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOGGER = logging.getLogger("pytradingbot")
-LOGGER.setLevel(getattr(logging, Env.LOG_LEVEL, logging.DEBUG))
+LOGGER.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
 handler = logging.FileHandler(
-    filename=str(Env.LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
+    filename=str(env.LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
-handler.setLevel(getattr(logging, Env.LOG_LEVEL, logging.DEBUG))
+handler.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
 handler.setFormatter(
     fmt=logging.Formatter(
         datefmt="%b-%d-%Y %I:%M:%S %p",
@@ -117,7 +120,7 @@ class Config:
     TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
 
     # Datastore — SQLite3 for cross-platform compatibility
-    DB_PATH: str = str(Env.DB_DIR / "scan_history.db")
+    DB_PATH: str = str(env.DB_DIR / "scan_history.db")
 
     # Scheduler defaults (all times are interpreted in America/New_York)
     MARKET_TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
@@ -159,3 +162,6 @@ class Config:
         ],
         "after_hours": {"enabled": True, "run_time": "16:15", "close": "20:00"},
     }
+
+
+config = Config()

@@ -7,7 +7,7 @@ from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
-from pytradingbot.constants import LOGGER, Config
+from pytradingbot.constants import LOGGER, config
 
 
 def enrich_ticker(ticker: str) -> pd.Series:
@@ -255,7 +255,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
         DataFrame with enriched data.
     """
     # Use caller-supplied filters or fall back to module-level defaults
-    _filters = filters or Config.DEFAULT_FILTERS
+    _filters = filters or config.DEFAULT_FILTERS
 
     LOGGER.info(f"Starting scan with filters: {_filters}")
 
