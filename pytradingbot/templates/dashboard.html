@@ -1122,7 +1122,7 @@
                     <div class="form-group">
                         <label for="tickerInput">Add Ticker</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="tickerInput" placeholder="Enter ticker symbol">
+                            <input type="text" class="form-control" id="tickerInput" placeholder="Enter space separated ticker symbol(s)">
                             <div class="input-group-append">
                                 <button class="btn btn-primary" onclick="addTicker()">Add</button>
                             </div>
@@ -1918,7 +1918,7 @@
             response = await fetch('/tickers', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ticker: input.value})
+                body: JSON.stringify({tickers: input.value})
             });
             if (!response.ok) {
                 const errorData = await response.json();

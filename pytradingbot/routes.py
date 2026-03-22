@@ -219,7 +219,11 @@ def _render(
     if env.USERNAME and env.PASSWORD:
         args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
 
-    return request.app.state.templates.TemplateResponse("dashboard.html", args)
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context=args,
+    )
 
 
 async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypass_cooldown: bool = False) -> bool:

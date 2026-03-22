@@ -2,32 +2,38 @@ import json
 import logging
 import os
 from http import HTTPStatus
-from typing import List
+from typing import Dict, List
 
-import yfinance
+import yfinance as yf
 from fastapi.exceptions import HTTPException
 from pydantic import BaseModel
 
-from pytradingbot.constants import config
+from pytradingbot.constants import LOGGER, config
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 
-def is_valid_ticker(ticker: str) -> bool:
+def check_validity(tickers: str) -> Dict[str, bool]:
     """Check if a ticker symbol is valid by attempting to fetch its data.
 
     Args:
-        ticker: Ticker symbol to validate.
+        tickers: Ticker symbol(s) to validate.
 
     Returns:
-        bool:
-        True if the ticker is valid, False otherwise.
+        Dict[str, bool]:
+        Dictionary of ticker symbols and their validity status (True if valid, False if invalid).
     """
-    try:
-        data = yfinance.Ticker(ticker).history(period="1d")
-        return not data.empty
-    except Exception:
-        return False
+    tickers_list = tickers.split()
+    data = yf.download(tickers_list, period="1d", group_by="ticker", auto_adjust=False, progress=False)
+
+    results = {}
+    for ticker in tickers_list:
+        try:
+            results[ticker] = not data[ticker].empty
+        except Exception as warn:
+            LOGGER.warning(warn)
+            results[ticker] = False
+    return results
 
 
 class TickerManager:
@@ -53,12 +59,11 @@ class TickerManager:
         with open(self.filepath) as f:
             return json.load(f)
 
-    def add(self, ticker: str):
-        """Add a ticker to the subscription list if it's not already present."""
-        tickers = self.get_all()
-        if ticker not in tickers:
-            tickers.append(ticker)
-            self._save(tickers)
+    def add(self, tickers: List[str]):
+        """Add ticker symbols to the subscription list if not already present."""
+        base_tickers = self.get_all()
+        updated_tickers = list(dict.fromkeys([*base_tickers, *tickers]))
+        self._save(updated_tickers)
 
     def remove(self, ticker: str):
         """Remove a ticker from the subscription list if it exists."""
@@ -78,7 +83,7 @@ ticker_manager = TickerManager()
 class TickerSubscription(BaseModel):
     """Represents a ticker subscription for real-time updates."""
 
-    ticker: str
+    tickers: str
 
 
 async def get_tickers() -> List[str]:
@@ -91,22 +96,27 @@ async def get_tickers() -> List[str]:
     return ticker_manager.get_all()
 
 
-async def add_ticker(payload: TickerSubscription) -> None:
+async def add_ticker(payload: TickerSubscription):
     """Add a ticker to the subscription list.
 
     Args:
         payload: TickerSubscription object containing the ticker symbol to add.
-
-    Raises:
-        HTTPException:
-        If the ticker symbol is empty or invalid.
     """
-    if not payload.ticker:
+    if not payload.tickers:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Ticker symbol cannot be empty")
-    if is_valid_ticker(payload.ticker):
-        ticker_manager.add(payload.ticker)
-    else:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=f"Invalid ticker symbol: {payload.ticker!r}")
+    existing = ticker_manager.get_all()
+    filtered = [ticker for ticker in payload.tickers.split() if ticker not in existing]
+    if not filtered:
+        raise HTTPException(
+            status_code=HTTPStatus.OK, detail=f"Ticker symbol(s) {', '.join(payload.tickers)} already exists"
+        )
+    status_flags = check_validity(" ".join(filtered))
+    if valid := [ticker for ticker, valid in status_flags.items() if valid]:
+        ticker_manager.add(valid)
+    if invalid := [ticker for ticker, valid in status_flags.items() if not valid]:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=f"Invalid ticker symbol(s): {', '.join(invalid)}"
+        )
 
 
 async def remove_ticker(ticker: str):
