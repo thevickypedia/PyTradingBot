@@ -38,6 +38,34 @@ pytradingbot start
 
 > Use `pytradingbot --help` for usage instructions.
 
+## Containerized
+
+**Build**
+```shell
+docker build -t pytradingbot .
+```
+
+**Run**
+```shell
+docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
+```
+
+## Environment Variables
+> All environment variables are optional.
+
+**API basics**
+- **PORT**: API port. _Defaults to 8080_
+- **LOG_LEVEL**: Log level for the API server. _Defaults to `DEBUG`_
+- **SCAN_COOLDOWN_SECONDS**: Cooldown time before requesting another scan. _Defaults to 60_
+
+**Authentication**
+- **USERNAME**: Username to protect the server with authentication.
+- **PASSWORD**: Password to protect the server with authentication.
+
+**Notification setup**
+- **TELEGRAM_BOT_TOKEN**: Telegram bot token to notify the user.
+- **TELEGRAM_CHAT_IDS**: Comma separated list of chat IDs to notify.
+
 ### Background Scheduler
 
 The API runs a background async scheduler that triggers scans automatically (EST) and stores each run in the existing shelve DB.
@@ -54,18 +82,6 @@ You can override these rules from the Dashboard `Schedule` tab, or through:
 
 - `GET /schedule` to read current/default config
 - `POST /schedule` to save overrides
-
-## Containerized
-
-**Build**
-```shell
-docker build -t pytradingbot .
-```
-
-**Run**
-```shell
-docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
-```
 
 ## [Release Notes][release-notes]
 **Requirement**

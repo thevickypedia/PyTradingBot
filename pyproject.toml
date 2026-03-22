@@ -17,6 +17,7 @@ requires-python = ">=3.11"
 dependencies = [
     "Jinja2==3.1.*",
     "pandas==3.0.*",
+    "requests==2.*",
     "uvicorn==0.42.*",
     "yfinance==1.2.*",
     "pydantic==2.12.*",

@@ -23,7 +23,28 @@ class ScanStatus(StrEnum):
 LOGS_DIR = pathlib.Path("logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
+# Environment variables with defaults
+_approved_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 LOG_LEVEL = (os.getenv("LOG_LEVEL") or os.getenv("log_level") or "DEBUG").upper()
+assert LOG_LEVEL in _approved_log_levels, f"Invalid LOG_LEVEL value, must be one of {', '.join(_approved_log_levels)}"
+
+# API Starter pack
+HOST = os.getenv("HOST") or os.getenv("host") or "0.0.0.0"
+PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")
+
+# Users may not trigger a new scan within this window after the last one completed.
+SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv("scan_cooldown_seconds") or 60)
+
+# Credentials
+USERNAME = os.getenv("USERNAME") or os.getenv("username") or os.getenv("USER") or os.getenv("user")
+PASSWORD = os.getenv("PASSWORD") or os.getenv("password") or os.getenv("PASS") or os.getenv("pass")
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("telegram_bot_token")
+TELEGRAM_CHAT_IDS = [
+    int(chat_id.strip())
+    for chat_id in (os.getenv("TELEGRAM_CHAT_IDS") or os.getenv("telegram_chat_ids") or "").split(",")
+    if chat_id.strip().isdigit()
+]
 
 LOGGER = logging.getLogger("pytradingbot")
 LOGGER.setLevel(getattr(logging, LOG_LEVEL, logging.DEBUG))
@@ -53,14 +74,7 @@ DEFAULT_FILTERS = {
     "RSI (14)": "Not Overbought (<60)",
 }
 
-# API Starter pack
-HOST = "0.0.0.0"
-PORT = int(os.getenv("PORT") or os.getenv("port") or "8080")
-
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
-
-# Users may not trigger a new scan within this window after the last one completed.
-SCAN_COOLDOWN_SECONDS: int = int(os.getenv("SCAN_COOLDOWN_SECONDS") or os.getenv("scan_cooldown_seconds") or 60)
 
 # Datastore
 DB_DIR = pathlib.Path("data")
@@ -108,7 +122,3 @@ DEFAULT_SCHEDULE = {
     ],
     "after_hours": {"enabled": True, "run_time": "16:15", "close": "20:00"},
 }
-
-# Credentials
-USERNAME = os.getenv("USERNAME") or os.getenv("username") or os.getenv("USER") or os.getenv("user")
-PASSWORD = os.getenv("PASSWORD") or os.getenv("password") or os.getenv("PASS") or os.getenv("pass")

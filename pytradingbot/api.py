@@ -160,6 +160,5 @@ else:
     LOGGER.debug("Routes attached directly to app without auth wrapper.")
 
 # TODO:
-#   Add notifications through Telegram and Gmail
 #   Extend Telegram support to score an individual ticker
-#   Include multiple candlestick trackers
+#   Include multiple candlestick trackers using webull, Alpha Vantage etc

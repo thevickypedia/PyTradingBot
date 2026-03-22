@@ -20,7 +20,8 @@ from pytradingbot.constants import (
     USERNAME,
     ScanStatus,
 )
-from pytradingbot.main import builder
+from pytradingbot.main import builder, get_signals, jsonify_scan_data
+from pytradingbot.telegram import send_telegram_message
 
 
 class ScanRequest(BaseModel):
@@ -205,10 +206,28 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
     async def _run_scan() -> None:
         """Run background scan and update app state when it finishes."""
         try:
-            LOGGER.debug("Background scan task started for source=%s.", source)
-            data = await asyncio.to_thread(builder, to_dict=True, filters=filters)
-
+            LOGGER.debug("Background scan task started for source: %s", source)
+            df = await asyncio.to_thread(builder, filters=filters)
             ts = datetime.now().strftime("%Y-%m-%d %I:%M %p ") + time.strftime("%Z")
+
+            LOGGER.debug("Getting signals for %s scan completed with %d records.", source, len(df))
+            buy, sell, fallback = get_signals(df)
+            message = f"Scan Timestamp: {ts}\n\n"
+            if fallback:
+                LOGGER.info("No strong signals found. Using top 2 by score as fallback.")
+                message += "No strong signals found. Top 2 signals below:\n\n"
+            else:
+                LOGGER.info("Scan completed with %d strong buy and %d strong sell signals.", len(buy), len(sell))
+                message += "Scan completed. Strongest signals below:\n\n"
+            message += "Buy: {} ({})\nSell: {} ({})".format(
+                buy.iloc[0]["Ticker"] if not buy.empty else "N/A",
+                buy.iloc[0]["Score"] if not buy.empty else "N/A",
+                sell.iloc[0]["Ticker"] if not sell.empty else "N/A",
+                sell.iloc[0]["Score"] if not sell.empty else "N/A",
+            )
+            await send_telegram_message(message)
+
+            data = jsonify_scan_data(df)
             storage.save_scan(ts, data)
 
             app.state.scan_data = data
@@ -369,7 +388,9 @@ def get_logs(request: Request) -> JSONResponse:
     try:
         lines = selected.read_text(errors="replace").splitlines()
         is_current = selected.name == latest.name
-        LOGGER.info("Returning log file %s with %d total lines (is_current=%s).", selected.name, len(lines), is_current)
+        LOGGER.debug(
+            "Returning log file %s with %d total lines (is_current=%s).", selected.name, len(lines), is_current
+        )
         return JSONResponse(
             {
                 "content": "\n".join(lines[-500:]),

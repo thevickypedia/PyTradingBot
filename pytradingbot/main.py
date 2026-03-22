@@ -1,5 +1,5 @@
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 import yfinance as yf
@@ -150,9 +150,52 @@ def score_stock(row: pd.Series) -> int:
     return score
 
 
-def builder(
-    filepath: str = None, to_dict: bool = False, filters: dict | None = None
-) -> pd.DataFrame | List[Dict[str, Any]]:
+def get_signals(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
+    """Derive strong buy/sell signals from the enriched dataframe."""
+    # Strong Buy
+    strong_buy = df[
+        (df["TD_Signal"] == "STRONG BUY")
+        & (df["YF_Signal"].isin(["STRONG BUY", "BUY"]))
+        & (df["TD_Trend"] == "UPTREND")
+        & (df["EMA_Cross"] == "CROSS UP")
+        & (df["RSI"].between(50, 65))
+        & (df["Score"] >= 60)
+        & (~df["Insider_Action"].str.contains("Sale", na=False))
+    ]
+
+    # Strong Sell
+    strong_sell = df[
+        (df["TD_Signal"] == "SELL")
+        & (df["YF_Signal"].isin(["SELL", "WEAK - WAIT"]))
+        & (df["TD_Trend"] == "DOWNTREND")
+        & (df["EMA_Cross"] == "CROSS DOWN")
+        & (df["RSI"] > 65)
+        & (df["Score"] < 30)
+    ]
+
+    if strong_buy.empty and strong_sell.empty:
+        return df.nlargest(2, "Score"), df.nsmallest(2, "Score"), True
+
+    return strong_buy, strong_sell, False
+
+
+def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Convert dataframe to list of dicts with NaN as None for JSON rendering."""
+    records = df.to_dict(orient="records")
+
+    # Replace float NaN with None for safe Jinja2 / JSON rendering.
+    # df.where() cannot guarantee None for numeric columns, so we check each value.
+    def _clean(v):
+        """Convert NaN to None, leave other values unchanged."""
+        try:
+            return None if (isinstance(v, float) and math.isnan(v)) else v
+        except (TypeError, ValueError):
+            return v
+
+    return [{k: _clean(v) for k, v in row.items()} for row in records]
+
+
+def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     """Build a dataframe from the raw data."""
     # Use caller-supplied filters or fall back to module-level defaults
     _filters = filters or DEFAULT_FILTERS
@@ -165,26 +208,22 @@ def builder(
     scan_df = foverview.screener_view()
     if scan_df is None or scan_df.empty:
         LOGGER.warning("Overview screener returned no results — check filter values: %s", _filters)
-        return (
-            []
-            if to_dict
-            else pd.DataFrame(
-                columns=[
-                    "Ticker",
-                    "Price",
-                    "Change",
-                    "Volume",
-                    "RSI",
-                    "ATR",
-                    "TD_Signal",
-                    "TD_Trend",
-                    "YF_Signal",
-                    "EMA_Cross",
-                    "Score",
-                    "Latest_News",
-                    "Insider_Action",
-                ]
-            )
+        return pd.DataFrame(
+            columns=[
+                "Ticker",
+                "Price",
+                "Change",
+                "Volume",
+                "RSI",
+                "ATR",
+                "TD_Signal",
+                "TD_Trend",
+                "YF_Signal",
+                "EMA_Cross",
+                "Score",
+                "Latest_News",
+                "Insider_Action",
+            ]
         )
 
     ftech = Technical()
@@ -192,26 +231,22 @@ def builder(
     tech_df = ftech.screener_view()
     if tech_df is None or tech_df.empty:
         LOGGER.warning("Technical screener returned no results — check filter values: %s", _filters)
-        return (
-            []
-            if to_dict
-            else pd.DataFrame(
-                columns=[
-                    "Ticker",
-                    "Price",
-                    "Change",
-                    "Volume",
-                    "RSI",
-                    "ATR",
-                    "TD_Signal",
-                    "TD_Trend",
-                    "YF_Signal",
-                    "EMA_Cross",
-                    "Score",
-                    "Latest_News",
-                    "Insider_Action",
-                ]
-            )
+        return pd.DataFrame(
+            columns=[
+                "Ticker",
+                "Price",
+                "Change",
+                "Volume",
+                "RSI",
+                "ATR",
+                "TD_Signal",
+                "TD_Trend",
+                "YF_Signal",
+                "EMA_Cross",
+                "Score",
+                "Latest_News",
+                "Insider_Action",
+            ]
         )
 
     # Build final dataframe
@@ -262,20 +297,6 @@ def builder(
                 filtered_df.to_html(filepath, index=False)
             case _:
                 raise ValueError("Unsupported file format. Use .csv, .xlsx, .json, or .html")
-
-    if to_dict:
-        records = filtered_df.to_dict(orient="records")
-
-        # Replace float NaN with None for safe Jinja2 / JSON rendering.
-        # df.where() cannot guarantee None for numeric columns, so we check each value.
-        def _clean(v):
-            """Convert NaN to None, leave other values unchanged."""
-            try:
-                return None if (isinstance(v, float) and math.isnan(v)) else v
-            except (TypeError, ValueError):
-                return v
-
-        return [{k: _clean(v) for k, v in row.items()} for row in records]
 
     return filtered_df
 
