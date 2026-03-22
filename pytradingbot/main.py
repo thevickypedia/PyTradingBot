@@ -1,4 +1,5 @@
 import math
+from collections.abc import Generator
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
@@ -8,6 +9,23 @@ from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
 from pytradingbot.constants import LOGGER, config
+from pytradingbot.tickers import ticker_manager
+
+FILTERED_COLUMNS = [
+    "Ticker",
+    "Price",
+    "Change",
+    "Volume",
+    "RSI",
+    "ATR",
+    "TD_Signal",
+    "TD_Trend",
+    "YF_Signal",
+    "EMA_Cross",
+    "Score",
+    "Latest_News",
+    "Insider_Action",
+]
 
 
 def enrich_ticker(ticker: str) -> pd.Series:
@@ -243,6 +261,59 @@ def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return [{k: _clean(v) for k, v in row.items()} for row in records]
 
 
+def custom_tickers_builder() -> Generator[Dict[str, Any]]:
+    """Generate metrics for custom tickers.
+
+    Yields:
+        Dict[str, Any]:
+        Yields a key-value pair with metrics.
+    """
+    tickers = ticker_manager.get_all()
+
+    price, change, volume, rsi, atr = "N/A", "N/A", "N/A", "N/A", "N/A"
+    for ticker in tickers:
+        try:
+            data = yf.Ticker(ticker)
+
+            hist = data.history(period="2d", interval="1d")
+            if hist.empty or len(hist) < 2:
+                continue
+
+            latest = hist.iloc[-1]
+            prev = hist.iloc[-2]
+
+            price = latest["Close"]
+            change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
+            volume = latest["Volume"]
+
+            delta = hist["Close"].diff()
+            gain = delta.clip(lower=0).rolling(14).mean()
+            loss = -delta.clip(upper=0).rolling(14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs.iloc[-1])) if not rs.empty else 50
+
+            atr = latest["High"] - latest["Low"]
+
+            yield {
+                "Ticker": ticker,
+                "Price": price,
+                "Change": change,
+                "Volume": volume,
+                "RSI": rsi,
+                "ATR": atr,
+            }
+        except Exception as err:
+            LOGGER.error(f"Error fetching base data for custom {ticker}: {err}")
+            yield {
+                "Ticker": ticker,
+                "Price": price,
+                "Change": change,
+                "Volume": volume,
+                "RSI": rsi,
+                "ATR": atr,
+            }
+
+
 def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     """Build a dataframe from the raw data.
 
@@ -265,97 +336,65 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     scan_df = foverview.screener_view()
     if scan_df is None or scan_df.empty:
         LOGGER.warning("Overview screener returned no results — check filter values: %s", _filters)
-        return pd.DataFrame(
-            columns=[
-                "Ticker",
-                "Price",
-                "Change",
-                "Volume",
-                "RSI",
-                "ATR",
-                "TD_Signal",
-                "TD_Trend",
-                "YF_Signal",
-                "EMA_Cross",
-                "Score",
-                "Latest_News",
-                "Insider_Action",
-            ]
-        )
+        return pd.DataFrame(columns=FILTERED_COLUMNS)
 
     ftech = Technical()
     ftech.set_filter(filters_dict=_filters)
     tech_df = ftech.screener_view()
     if tech_df is None or tech_df.empty:
         LOGGER.warning("Technical screener returned no results — check filter values: %s", _filters)
-        return pd.DataFrame(
-            columns=[
-                "Ticker",
-                "Price",
-                "Change",
-                "Volume",
-                "RSI",
-                "ATR",
-                "TD_Signal",
-                "TD_Trend",
-                "YF_Signal",
-                "EMA_Cross",
-                "Score",
-                "Latest_News",
-                "Insider_Action",
-            ]
-        )
+        return pd.DataFrame(columns=FILTERED_COLUMNS)
 
-    # Build final dataframe
-    final_df = scan_df.merge(tech_df[["Ticker", "Beta", "ATR", "SMA20", "SMA50", "RSI", "Gap"]], on="Ticker")
-    enriched = final_df["Ticker"].apply(enrich_ticker)
-    final_df = pd.concat([final_df, enriched], axis=1)
+    # Build merger dataframe
+    merged_df = scan_df.merge(tech_df[["Ticker", "Beta", "ATR", "SMA20", "SMA50", "RSI", "Gap"]], on="Ticker")
+    enriched = merged_df["Ticker"].apply(enrich_ticker)
+    merged_df = pd.concat([merged_df, enriched], axis=1)
 
     # Candle signals
-    signals = final_df["Ticker"].apply(get_candle_signal)
-    final_df = pd.concat([final_df, signals], axis=1)
+    signals = merged_df["Ticker"].apply(get_candle_signal)
+    merged_df = pd.concat([merged_df, signals], axis=1)
 
     # Numeric conversions
-    final_df["Volume"] = pd.to_numeric(final_df["Volume"].astype(str).str.replace(",", ""), errors="coerce")
-    final_df["ATR"] = pd.to_numeric(final_df["ATR"], errors="coerce")
-    final_df["RSI"] = pd.to_numeric(final_df["RSI"], errors="coerce")
-    final_df["Change"] = pd.to_numeric(final_df["Change"].astype(str).str.replace("%", ""), errors="coerce")
+    merged_df["Volume"] = pd.to_numeric(merged_df["Volume"].astype(str).str.replace(",", ""), errors="coerce")
+    merged_df["ATR"] = pd.to_numeric(merged_df["ATR"], errors="coerce")
+    merged_df["RSI"] = pd.to_numeric(merged_df["RSI"], errors="coerce")
+    merged_df["Change"] = pd.to_numeric(merged_df["Change"].astype(str).str.replace("%", ""), errors="coerce")
 
-    final_df = final_df[final_df["RSI"] < 70]
-    final_df["Score"] = final_df.apply(score_stock, axis=1)
-    final_df = final_df.sort_values("Score", ascending=False)
+    merged_df = merged_df[merged_df["RSI"] < 70]
+    merged_df["Score"] = merged_df.apply(score_stock, axis=1)
+    merged_df = merged_df.sort_values("Score", ascending=False)
 
-    filtered_df = final_df[
-        [
-            "Ticker",
-            "Price",
-            "Change",
-            "Volume",
-            "RSI",
-            "ATR",
-            "TD_Signal",
-            "TD_Trend",
-            "YF_Signal",
-            "EMA_Cross",
-            "Score",
-            "Latest_News",
-            "Insider_Action",
-        ]
-    ]
+    custom_df = pd.DataFrame(list(custom_tickers_builder()))
+    if not custom_df.empty:
+        LOGGER.info(f"Processing {len(custom_df)} custom tickers")
+
+        enriched = custom_df["Ticker"].apply(enrich_ticker)
+        custom_df = pd.concat([custom_df, enriched], axis=1)
+
+        signals = custom_df["Ticker"].apply(get_candle_signal)
+        custom_df = pd.concat([custom_df, signals], axis=1)
+
+        custom_df["Score"] = custom_df.apply(score_stock, axis=1)
+        custom_df = custom_df[FILTERED_COLUMNS]
+
+    filtered_df = merged_df[FILTERED_COLUMNS]
+    final_df = pd.concat([filtered_df, custom_df], ignore_index=True)
+    final_df = final_df.drop_duplicates(subset=["Ticker"])
+
     if filepath:
         match filepath.split(".")[-1]:
             case "csv":
-                filtered_df.to_csv(filepath, index=False)
+                final_df.to_csv(filepath, index=False)
             case "xlsx":
-                filtered_df.to_excel(filepath, index=False)
+                final_df.to_excel(filepath, index=False)
             case "json":
-                filtered_df.to_json(filepath, orient="records", lines=True)
+                final_df.to_json(filepath, orient="records", lines=True)
             case "html":
-                filtered_df.to_html(filepath, index=False)
+                final_df.to_html(filepath, index=False)
             case _:
                 raise ValueError("Unsupported file format. Use .csv, .xlsx, .json, or .html")
 
-    return filtered_df
+    return final_df
 
 
 if __name__ == "__main__":
