@@ -116,10 +116,8 @@ class Config:
 
     TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
 
-    # Datastore
-    DB_PATH: str = str(Env.DB_DIR / "scan_history")
-    DB_INDEX_KEY: str = "__index__"
-    DB_SCHEDULE_KEY: str = "__schedule__"
+    # Datastore — SQLite3 for cross-platform compatibility
+    DB_PATH: str = str(Env.DB_DIR / "scan_history.db")
 
     # Scheduler defaults (all times are interpreted in America/New_York)
     MARKET_TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")

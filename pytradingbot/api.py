@@ -29,7 +29,7 @@ from pytradingbot.scheduler import ScanScheduler
 async def lifespan(app_: FastAPI):
     """Initialize app state.
 
-    Loads the latest historical snapshot from the shelve DB so the dashboard
+    Loads the latest historical snapshot from the SQLite DB so the dashboard
     shows data immediately on restart without requiring a fresh scan.
     """
     LOGGER.debug("Starting application lifespan initialization.")
@@ -159,8 +159,5 @@ app.routes.append(
 )
 
 # TODO:
-#   Filter health check logging
-#   Outside docker -> scan_history.db
-#   Inside docker -> scan_history and an error message "BDB0210 /data/scan_history.db: metadata page checksum error"
 #   Extend Telegram support to score an individual ticker
 #   Include multiple candlestick trackers using webull, Alpha Vantage etc
