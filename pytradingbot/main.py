@@ -261,15 +261,16 @@ def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return [{k: _clean(v) for k, v in row.items()} for row in records]
 
 
-def custom_tickers_builder() -> Generator[Dict[str, Any]]:
+def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any]]:
     """Generate metrics for custom tickers.
+
+    Args:
+        tickers: List of ticker symbols.
 
     Yields:
         Dict[str, Any]:
         Yields a key-value pair with metrics.
     """
-    tickers = ticker_manager.get_all()
-
     price, change, volume, rsi, atr = "N/A", "N/A", "N/A", "N/A", "N/A"
     for ticker in tickers:
         try:
@@ -363,8 +364,11 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     merged_df = merged_df[merged_df["RSI"] < 70]
     merged_df["Score"] = merged_df.apply(score_stock, axis=1)
     merged_df = merged_df.sort_values("Score", ascending=False)
+    custom_tickers = [
+        ticker for ticker in ticker_manager.get_all() if ticker not in set(merged_df["Ticker"].astype(str))
+    ]
 
-    custom_df = pd.DataFrame(list(custom_tickers_builder()))
+    custom_df = pd.DataFrame(list(custom_tickers_builder(custom_tickers)))
     if not custom_df.empty:
         LOGGER.info(f"Processing {len(custom_df)} custom tickers")
 
