@@ -12,6 +12,7 @@ from pytradingbot.constants import LOGGER, config
 from pytradingbot.tickers import ticker_manager
 
 FILTERED_COLUMNS = [
+    "Source",
     "Ticker",
     "Price",
     "Change",
@@ -363,7 +364,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
 
     merged_df = merged_df[merged_df["RSI"] < 70]
     merged_df["Score"] = merged_df.apply(score_stock, axis=1)
-    merged_df = merged_df.sort_values("Score", ascending=False)
+    merged_df["Source"] = "Finviz"
     custom_tickers = [
         ticker for ticker in ticker_manager.get_all() if ticker not in set(merged_df["Ticker"].astype(str))
     ]
@@ -379,11 +380,13 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
         custom_df = pd.concat([custom_df, signals], axis=1)
 
         custom_df["Score"] = custom_df.apply(score_stock, axis=1)
+        custom_df["Source"] = "Manual"
         custom_df = custom_df[FILTERED_COLUMNS]
 
     filtered_df = merged_df[FILTERED_COLUMNS]
     final_df = pd.concat([filtered_df, custom_df], ignore_index=True)
     final_df = final_df.drop_duplicates(subset=["Ticker"])
+    final_df = final_df.sort_values("Score", ascending=False)
 
     if filepath:
         match filepath.split(".")[-1]:

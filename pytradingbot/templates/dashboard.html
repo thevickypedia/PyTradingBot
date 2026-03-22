@@ -818,6 +818,7 @@
                                 <table id="scanTable" class="table mb-0">
                                     <thead>
                                     <tr>
+                                        <th>Source</th>
                                         <th>Ticker</th>
                                         <th>Price</th>
                                         <th>Change %</th>
@@ -836,6 +837,9 @@
                                     <tbody>
                                     {% for s in stocks %}
                                         <tr>
+                                            {# Source — sort alphabetically #}
+                                            <td data-order="{{ s.Source }}">{{ s.Source }}</td>
+
                                             {# Ticker — sort alphabetically on raw ticker symbol #}
                                             <td data-order="{{ s.Ticker }}"><span class="ticker">{{ s.Ticker }}</span>
                                             </td>
@@ -864,8 +868,8 @@
                                                     {% set rsi = s.RSI|float %}
                                                     <span class="{{ 'pos' if rsi < 50 else ('neg' if rsi > 65 else '') }}"
                                                           style="{{ 'color:var(--yellow);font-weight:600' if 50 <= rsi <= 65 else '' }}">
-                            {{ "%.1f"|format(rsi) }}
-                          </span>
+                                                        {{ "%.1f"|format(rsi) }}
+                                                    </span>
                                                 {% else %}—{% endif %}
                                             </td>
 

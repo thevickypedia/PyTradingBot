@@ -8,7 +8,7 @@ import yfinance
 from fastapi.exceptions import HTTPException
 from pydantic import BaseModel
 
-from pytradingbot.constants import env, config
+from pytradingbot.constants import config
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 

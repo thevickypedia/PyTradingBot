@@ -1,9 +1,5 @@
 """Lightweight scan-history persistence using SQLite3.
 
-SQLite3 is platform-independent and works identically across macOS, Linux,
-Docker, and all other systems. Replaces shelve which had incompatible dbm
-backends causing cross-platform issues.
-
 Produces a ``scan_history.db`` file inside ``<project_root>/data/``.
 
 Schema

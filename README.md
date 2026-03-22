@@ -74,7 +74,7 @@ docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
 
 ### Background Scheduler
 
-The API runs a background async scheduler that triggers scans automatically (EST) and stores each run in the existing shelve DB.
+The API runs a background async scheduler that triggers scans automatically (EST) and stores each run in the existing sqlite DB.
 
 #### Default schedule:
 
