@@ -518,6 +518,13 @@
             color: var(--blue);
         }
 
+        .btn-ghost:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            border-color: var(--border);
+            color: var(--muted);
+        }
+
         .btn-outline-secondary {
             border-color: var(--border);
             color: var(--muted);
@@ -811,7 +818,10 @@
                                 <span>📊 Stock Signals &amp; Scores</span>
                                 <div class="d-flex align-items-center">
                                     <small class="mr-3">{{ timestamp }}</small>
-                                    <button class="btn-ghost" onclick="triggerRescan()">↺ Rescan</button>
+                                    <button id="rescanBtn" class="btn-ghost" onclick="triggerRescan()"
+                                            {% if cooldown_remaining > 0 or scan_status == 'running' %}disabled{% endif %}>
+                                        {% if cooldown_remaining > 0 %}⏱ {{ cooldown_remaining }}s{% else %}↺ Rescan{% endif %}
+                                    </button>
                                 </div>
                             </div>
                             <div class="table-responsive">
@@ -1300,11 +1310,16 @@
 
     function _applyCooldownUI(secs) {
         const btn = document.getElementById('runScanBtn');
+        const rescanBtn = document.getElementById('rescanBtn');
         const pill = document.getElementById('cooldownPill');
         const cs = document.getElementById('controlStatus');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = `⏱ ${secs}s`;
+        }
+        if (rescanBtn) {
+            rescanBtn.disabled = true;
+            rescanBtn.innerHTML = `⏱ ${secs}s`;
         }
         if (pill) {
             pill.textContent = `⏱ ${secs}s cooldown`;
@@ -1315,11 +1330,16 @@
 
     function _clearCooldownUI() {
         const btn = document.getElementById('runScanBtn');
+        const rescanBtn = document.getElementById('rescanBtn');
         const pill = document.getElementById('cooldownPill');
         const cs = document.getElementById('controlStatus');
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '▶ Run Scan';
+        }
+        if (rescanBtn) {
+            rescanBtn.disabled = false;
+            rescanBtn.innerHTML = '↺ Rescan';
         }
         if (pill) {
             pill.classList.add('d-none');
@@ -1462,9 +1482,15 @@
     /* ── Run Scan button state ────────────────────────────── */
     function setRunBtnState(disabled) {
         const btn = document.getElementById('runScanBtn');
-        if (!btn) return;
-        btn.disabled = disabled;
-        btn.innerHTML = disabled ? '⏳ Scanning…' : '▶ Run Scan';
+        const rescanBtn = document.getElementById('rescanBtn');
+        if (btn) {
+            btn.disabled = disabled;
+            btn.innerHTML = disabled ? '⏳ Scanning…' : '▶ Run Scan';
+        }
+        if (rescanBtn) {
+            rescanBtn.disabled = disabled;
+            rescanBtn.innerHTML = disabled ? '⏳ Scanning…' : '↺ Rescan';
+        }
     }
 
     /* ── Filter editor ────────────────────────────────────── */
@@ -1850,7 +1876,7 @@
             pageLength: 25,
             lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'All']],
             columnDefs: [
-                {orderable: false, targets: [11, 12]},          // News & Insider — unsortable
+                {orderable: false, targets: [12]}, // News is unsortable
                 {className: 'text-center', targets: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]},
             ],
             language: {
