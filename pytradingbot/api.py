@@ -23,6 +23,7 @@ from pytradingbot.routes import (
     update_schedule,
 )
 from pytradingbot.scheduler import ScanScheduler
+from pytradingbot.tickers import add_ticker, get_tickers, remove_ticker
 
 
 @asynccontextmanager
@@ -124,6 +125,27 @@ def get_routes() -> List[APIRoute]:
             path="/schedule",
             endpoint=update_schedule,
             methods=["POST"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/tickers",
+            endpoint=get_tickers,
+            methods=["GET"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/tickers",
+            endpoint=add_ticker,
+            methods=["POST"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/tickers",
+            endpoint=remove_ticker,
+            methods=["DELETE"],
             include_in_schema=False,
             response_class=JSONResponse,
         ),

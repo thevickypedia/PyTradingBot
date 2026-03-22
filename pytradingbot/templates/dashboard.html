@@ -695,6 +695,9 @@
             <a class="nav-link" id="tab-schedule-link" data-toggle="tab" href="#tab-schedule" role="tab">🗓 Schedule</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link" id="tab-tickers-link" data-toggle="tab" href="#tab-tickers" role="tab">📨 Tickers</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" id="tab-logs-link" data-toggle="tab" href="#tab-logs" role="tab">📋 Logs</a>
         </li>
     </ul>
@@ -1095,6 +1098,27 @@
         </div>
         {# /tab-schedule #}
 
+        <!-- ═══════════════  TICKERS TAB  ═══════════════════ -->
+        <div class="tab-pane fade" id="tab-tickers" role="tabpanel">
+            <div class="ctrl-card">
+                <div class="ctrl-card-header">
+                    <span>📨 Ticker Subscriptions</span>
+                </div>
+                <div class="ctrl-card-body">
+                    <div class="form-group">
+                        <label for="tickerInput">Add Ticker</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="tickerInput" placeholder="Enter ticker symbol">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" onclick="addTicker()">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                    <ul class="list-group" id="tickerList"></ul>
+                </div>
+            </div>
+        </div>
+        {# /tab-tickers #}
 
         <!-- ═══════════════  LOGS TAB  ══════════════════════= -->
         <div class="tab-pane fade" id="tab-logs" role="tabpanel">
@@ -1835,6 +1859,56 @@
             },
         });
     }
+
+    /* ── Tickers ────────────────────────────────────────────── */
+    async function loadTickers() {
+        const res = await fetch('/tickers');
+        const tickers = await res.json();
+
+        const list = document.getElementById("tickerList");
+        list.innerHTML = "";
+        tickers.forEach(t => {
+            const li = document.createElement("li");
+            li.className = "d-flex justify-content-between align-items-center";
+            li.innerHTML = `
+            <span>${t}</span>
+            <button class="btn-ghost" onclick="removeTicker('${t}')">Remove</button>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    async function addTicker() {
+        const input = document.getElementById("tickerInput");
+        if (!input.value.trim()) {
+            alert('Please enter a ticker symbol.');
+            return;
+        }
+        try {
+            response = await fetch('/tickers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ticker: input.value})
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to add ticker');
+            }
+            input.value = "";
+        } catch (error) {
+            console.error('Error adding ticker:', error);
+            alert(error.message);
+        } finally {
+            loadTickers();
+        }
+    }
+
+    async function removeTicker(ticker) {
+        await fetch(`/tickers?ticker=${ticker}`, { method: 'DELETE' });
+        loadTickers();
+    }
+
+    loadTickers();
 </script>
 
 <script>

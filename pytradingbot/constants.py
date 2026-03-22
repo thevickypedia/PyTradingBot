@@ -122,6 +122,8 @@ class Config:
     # Datastore — SQLite3 for cross-platform compatibility
     DB_PATH: str = str(env.DB_DIR / "scan_history.db")
 
+    TICKERS_PATH: str = str(env.DB_DIR / "tickers.json")
+
     # Scheduler defaults (all times are interpreted in America/New_York)
     MARKET_TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
     DEFAULT_SCHEDULE: Dict[str, Any] = {
