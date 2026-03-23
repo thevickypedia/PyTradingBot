@@ -2,6 +2,7 @@ import math
 from collections.abc import Generator
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 from finvizfinance.quote import finvizfinance
@@ -53,7 +54,7 @@ def enrich_ticker(ticker: str) -> pd.Series:
         return pd.Series({"Latest_News": "N/A", "Insider_Action": "N/A"})
 
 
-def get_candle_signal(ticker: str) -> pd.Series:
+def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
     """Uses yfinance 5min candles for full signal analysis.
 
     See Also:
@@ -63,13 +64,16 @@ def get_candle_signal(ticker: str) -> pd.Series:
 
     Args:
         ticker: Ticker to use.
+        df: Pandas DataFrame to use.
 
     Returns:
         pd.Series:
         Series with latest candle data.
     """
     try:
-        df = yf.download(ticker, period="1d", interval="5m", progress=False)
+        if df is None or df.empty:
+            assert ticker is not None, "No ticker provided."
+            df = yf.download(ticker, period="1d", interval="5m", progress=False)
 
         if df.empty:
             return pd.Series(
@@ -81,16 +85,18 @@ def get_candle_signal(ticker: str) -> pd.Series:
             df.columns = df.columns.get_level_values(0)
 
         # ---- Candle Direction Analysis ----
-        last_5 = df.tail(5).copy()
-        last_5["bullish"] = last_5["Close"] > last_5["Open"]
-        bullish_count = last_5["bullish"].sum()
+        close = df["Close"].values
+        open_ = df["Open"].values
+        high = df["High"].values
+        low = df["Low"].values
 
-        last_candle = last_5.iloc[-1]
-        prev_candle = last_5.iloc[-2]
+        bullish = close > open_
+        bullish_count = int(np.sum(bullish))
 
-        higher_high = last_candle["High"].item() > prev_candle["High"].item()
-        higher_low = last_candle["Low"].item() > prev_candle["Low"].item()
+        higher_high = float(high[-1]) > float(high[-2])
+        higher_low = float(low[-1]) > float(low[-2])
 
+        # ---- TD SIGNAL ----
         if bullish_count >= 4 and higher_high and higher_low:
             td_signal = "STRONG BUY"
         elif bullish_count >= 3 and higher_high:
