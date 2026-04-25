@@ -30,15 +30,29 @@ FILTERED_COLUMNS = [
 ]
 
 
+def normalize_change(raw: float) -> float:
+    """Normalize Change value to percentage regardless of source.
+
+    Finviz returns decimal (0.23 = 23%).
+    Backtest / yfinance returns real % (2.3 = 2.3%).
+    Threshold of 2.0 safely separates the two without false positives
+    since a 200% daily move is essentially impossible on liquid stocks.
+    """
+    try:
+        val = float(raw)
+        return val * 100 if abs(val) < 2.0 else val
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def enrich_ticker(ticker: str) -> pd.Series:
-    """Enrich ticker with latest candle data.
+    """Enrich ticker with latest news and insider action.
 
     Args:
         ticker: Ticker to enrich.
 
     Returns:
-        pd.Series:
-        Series with latest news and insider action.
+        pd.Series: Series with latest news and insider action.
     """
     try:
         stock = finvizfinance(ticker)
@@ -63,12 +77,11 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
         Volume Analysis: Confirms strength of price moves using volume spikes.
 
     Args:
-        ticker: Ticker to use.
-        df: Pandas DataFrame to use.
+        ticker: Ticker symbol to download data for.
+        df: Pre-built DataFrame to use instead of downloading.
 
     Returns:
-        pd.Series:
-        Series with latest candle data.
+        pd.Series: TD_Signal, TD_Trend, YF_Signal, EMA_Cross.
     """
     try:
         if df is None or df.empty:
@@ -80,15 +93,21 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
                 {"TD_Signal": "No data", "TD_Trend": "Unknown", "YF_Signal": "No data", "EMA_Cross": "Unknown"}
             )
 
-        # Flatten multi-level columns if present
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # ---- Candle Direction Analysis ----
-        close = df["Close"].values
-        open_ = df["Open"].values
-        high = df["High"].values
-        low = df["Low"].values
+        # Need at least 3 rows for meaningful comparison
+        if len(df) < 3:
+            return pd.Series(
+                {"TD_Signal": "No data", "TD_Trend": "Unknown", "YF_Signal": "No data", "EMA_Cross": "Unknown"}
+            )
+
+        # ---- Candle Direction Analysis (last 5 candles) ----
+        window = df.tail(5)
+        close = window["Close"].values.astype(float)
+        open_ = window["Open"].values.astype(float)
+        high = window["High"].values.astype(float)
+        low = window["Low"].values.astype(float)
 
         bullish = close > open_
         bullish_count = int(np.sum(bullish))
@@ -96,7 +115,7 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
         higher_high = float(high[-1]) > float(high[-2])
         higher_low = float(low[-1]) > float(low[-2])
 
-        # ---- TD SIGNAL ----
+        # ---- TD Signal ----
         if bullish_count >= 4 and higher_high and higher_low:
             td_signal = "STRONG BUY"
         elif bullish_count >= 3 and higher_high:
@@ -115,16 +134,17 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
         else:
             td_trend = "SIDEWAYS"
 
-        # ---- EMA Crossover Analysis ----
-        df["EMA9"] = df["Close"].ewm(span=9).mean()
-        df["EMA21"] = df["Close"].ewm(span=21).mean()
+        # ---- EMA Crossover Analysis (full df for accurate EMA) ----
+        df = df.copy()
+        df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
+        df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
 
-        last_ema9 = df["EMA9"].iloc[-1].item()
-        last_ema21 = df["EMA21"].iloc[-1].item()
-        prev_ema9 = df["EMA9"].iloc[-2].item()
-        prev_ema21 = df["EMA21"].iloc[-2].item()
-        last_volume = df["Volume"].iloc[-1].item()
-        avg_volume = df["Volume"].mean().item()
+        last_ema9 = float(df["EMA9"].iloc[-1])
+        last_ema21 = float(df["EMA21"].iloc[-1])
+        prev_ema9 = float(df["EMA9"].iloc[-2])
+        prev_ema21 = float(df["EMA21"].iloc[-2])
+        last_volume = float(df["Volume"].iloc[-1])
+        avg_volume = float(df["Volume"].mean())
 
         ema_cross_up = prev_ema9 < prev_ema21 and last_ema9 > last_ema21
         ema_cross_down = prev_ema9 > prev_ema21 and last_ema9 < last_ema21
@@ -144,62 +164,128 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
 
         ema_cross = "CROSS UP" if ema_cross_up else "CROSS DOWN" if ema_cross_down else "NO CROSS"
 
-        return pd.Series({"TD_Signal": td_signal, "TD_Trend": td_trend, "YF_Signal": yf_signal, "EMA_Cross": ema_cross})
+        return pd.Series(
+            {"TD_Signal": td_signal, "TD_Trend": td_trend, "YF_Signal": yf_signal, "EMA_Cross": ema_cross}
+        )
 
     except Exception as e:
-        LOGGER.error(f"Error fetching candle data for {ticker} : {e}")
+        LOGGER.error(f"Error fetching candle data for {ticker}: {e}")
         return pd.Series({"TD_Signal": "Error", "TD_Trend": "Error", "YF_Signal": "Error", "EMA_Cross": "Error"})
 
 
-def score_stock(row: pd.Series) -> int:
-    """Assign scoring based on volume, momentum, RSI, insider action and candles.
+def compute_trade_levels(row: pd.Series) -> pd.Series:
+    """Compute entry, stop loss and take profit based on ATR.
+
+    Uses 1.5x ATR stop and 3x ATR target = 2:1 risk reward minimum.
 
     Args:
-        row: DataFrame row with necessary columns for scoring.
+        row: DataFrame row with Price and ATR columns.
 
     Returns:
-        int:
-        Score based on volume, momentum, RSI, insider action.
+        pd.Series: Entry, Stop_Loss, Take_Profit, Risk_Reward.
+    """
+    price = float(row.get("Price", row.get("Close", 0)) or 0)
+    atr = float(row.get("ATR", 0) or 0)
+
+    if price == 0 or atr == 0:
+        return pd.Series({"Entry": price, "Stop_Loss": None, "Take_Profit": None, "Risk_Reward": None})
+
+    stop_loss = round(price - (1.5 * atr), 2)
+    take_profit = round(price + (3.0 * atr), 2)
+    risk = price - stop_loss
+    reward = take_profit - price
+    risk_reward = round(reward / risk, 2) if risk > 0 else 0.0
+
+    return pd.Series({"Entry": price, "Stop_Loss": stop_loss, "Take_Profit": take_profit, "Risk_Reward": risk_reward})
+
+
+def score_stock(row: pd.Series) -> int:
+    """Score a stock from 0-100 based on momentum, volume, RSI, ATR, candles and insider action.
+
+    Args:
+        row: DataFrame row with all enriched columns.
+
+    Returns:
+        int: Score between -100 and 100.
     """
     score = 0
 
-    # Volume conviction (max 30 pts)
-    if row["Volume"] > 5000000:
-        score += 30
-    elif row["Volume"] > 2000000:
-        score += 20
-    elif row["Volume"] > 1000000:
-        score += 10
+    # Normalize change to real percentage regardless of source
+    change = normalize_change(row.get("Change", 0))
 
-    # Momentum via Change % (max 25 pts)
-    if row["Change"] > 20:
+    # ---- VOLUME CONVICTION (max 25 pts) ----
+    volume = float(row.get("Volume", 0) or 0)
+    if volume > 5_000_000:
         score += 25
-    elif row["Change"] > 10:
+    elif volume > 2_000_000:
         score += 15
-    elif row["Change"] > 5:
+    elif volume > 500_000:
         score += 10
 
-    # RSI sweet spot 50-65 = trending but not exhausted (max 25 pts)
-    if 50 <= row["RSI"] <= 65:
-        score += 25
-    elif 40 <= row["RSI"] < 50:
-        score += 15
-    elif 65 < row["RSI"] < 70:
-        score += 10
-
-    # Insider buying bonus (max 20 pts)
-    if "Buy" in str(row["Insider_Action"]):
+    # ---- MOMENTUM (max 20 pts) ----
+    # Reward early moves (3-8%), penalize extended (>15%) and negative
+    if 3 <= change <= 8:
         score += 20
-    elif "Sale" in str(row["Insider_Action"]):
+    elif 8 < change <= 15:
+        score += 10
+    elif change > 15:
+        score += 0   # likely a top, no reward
+    elif change < 0:
         score -= 10
 
-    # Candle signal bonus (max 20 pts)
-    if row["TD_Signal"] == "STRONG BUY" and row["YF_Signal"] == "STRONG BUY":
-        score += 20  # both agree = high confidence
-    elif row["TD_Signal"] == "BUY" or row["YF_Signal"] == "BUY":
-        score += 10
-    elif row["TD_Signal"] == "SELL" or row["YF_Signal"] == "SELL":
-        score -= 15  # penalize conflicting signals hard
+    # ---- RSI ENTRY ZONE (max 25 pts) ----
+    # Best entries are RSI 45-58: momentum building, not exhausted
+    rsi = float(row.get("RSI", 50) or 50)
+    if 45 <= rsi <= 58:
+        score += 25
+    elif 58 < rsi <= 65:
+        score += 15
+    elif 65 < rsi <= 70:
+        score += 5
+    elif rsi > 70:
+        score -= 20  # overbought
+    elif rsi < 40:
+        score -= 10  # weak, no momentum
+
+    # ---- ATR QUALITY (max 15 pts) ----
+    # Reward stocks with 2-5% ATR relative to price: enough to profit, not too wild
+    atr = float(row.get("ATR", 0) or 0)
+    price = float(row.get("Price", row.get("Close", 1)) or 1)
+    atr_pct = (atr / price * 100) if price > 0 else 0
+    if 2 <= atr_pct <= 5:
+        score += 15
+    elif 1 <= atr_pct < 2:
+        score += 8
+    elif atr_pct > 5:
+        score += 5   # too volatile
+
+    # ---- CANDLE CONFLUENCE (max 20 pts) ----
+    td = str(row.get("TD_Signal", ""))
+    yf_sig = str(row.get("YF_Signal", ""))
+    trend = str(row.get("TD_Trend", ""))
+    ema = str(row.get("EMA_Cross", ""))
+
+    if td == "STRONG BUY" and yf_sig == "STRONG BUY" and ema == "CROSS UP":
+        score += 20
+    elif td in ["STRONG BUY", "BUY"] and yf_sig in ["STRONG BUY", "BUY"]:
+        score += 12
+    elif td == "BUY" and trend == "UPTREND":
+        score += 8
+    elif td == "SELL" or yf_sig == "SELL":
+        score -= 20
+    elif td == "WEAK - WAIT" and yf_sig == "WEAK - WAIT":
+        score -= 5
+
+    # ---- INSIDER ACTION (max 15 pts) ----
+    insider = str(row.get("Insider_Action", ""))
+    if "Buy" in insider and "Proposed" not in insider:
+        score += 15   # genuine buy = strong signal
+    elif "Proposed" in insider and "Sale" not in insider:
+        score += 5    # scheduled buy, mild positive
+    elif "Proposed Sale" in insider:
+        score -= 5    # scheduled sale, mild negative
+    elif "Sale" in insider and "Proposed" not in insider:
+        score -= 15   # genuine sale = red flag
 
     return score
 
@@ -207,28 +293,25 @@ def score_stock(row: pd.Series) -> int:
 def get_signals(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
     """Derive strong buy/sell signals from the enriched dataframe.
 
-    See Also:
-        If there are no strong buy/sell signals, a fallback is returned with the top 2 highest and lowest scored stocks.
+    Falls back to top/bottom 2 scored stocks if no strong signals exist.
 
     Args:
-        df: DataFrame with enriched data.
+        df: Enriched DataFrame with Score column.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, bool]:
-        Tuple of dataframes with strong buy/sell signals, and a fallback boolean flag.
+        strong_buy df, strong_sell df, and fallback flag (True = fallback used).
     """
-    # Strong Buy
     strong_buy = df[
         (df["TD_Signal"] == "STRONG BUY")
         & (df["YF_Signal"].isin(["STRONG BUY", "BUY"]))
         & (df["TD_Trend"] == "UPTREND")
         & (df["EMA_Cross"] == "CROSS UP")
-        & (df["RSI"].between(50, 65))
+        & (df["RSI"].between(45, 65))
         & (df["Score"] >= 60)
         & (~df["Insider_Action"].str.contains("Sale", na=False))
     ]
 
-    # Strong Sell
     strong_sell = df[
         (df["TD_Signal"] == "SELL")
         & (df["YF_Signal"].isin(["SELL", "WEAK - WAIT"]))
@@ -245,21 +328,17 @@ def get_signals(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, bool]:
 
 
 def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Convert dataframe to list of dicts with NaN as None for JSON rendering.
+    """Convert dataframe to JSON-safe list of dicts with NaN replaced by None.
 
     Args:
-        df: DataFrame with enriched data.
+        df: Enriched DataFrame.
 
     Returns:
-        List[Dict[str, Any]]:
-        A list of dicts with NaN as None for JSON rendering.
+        List[Dict[str, Any]]: JSON-safe records.
     """
     records = df.to_dict(orient="records")
 
-    # Replace float NaN with None for safe Jinja2 / JSON rendering.
-    # df.where() cannot guarantee None for numeric columns, so we check each value.
     def _clean(v):
-        """Convert NaN to None, leave other values unchanged."""
         try:
             return None if (isinstance(v, float) and math.isnan(v)) else v
         except (TypeError, ValueError):
@@ -268,39 +347,44 @@ def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return [{k: _clean(v) for k, v in row.items()} for row in records]
 
 
-def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any]]:
-    """Generate metrics for custom tickers.
+def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any], None, None]:
+    """Generate base metrics for manually tracked tickers via yfinance.
+
+    Uses 2-day daily history to compute Change, RSI approximation, and ATR.
 
     Args:
         tickers: List of ticker symbols.
 
     Yields:
-        Dict[str, Any]:
-        Yields a key-value pair with metrics.
+        Dict[str, Any]: Metric dict per ticker.
     """
-    price, change, volume, rsi, atr = "N/A", "N/A", "N/A", "N/A", "N/A"
     for ticker in tickers:
+        price, change, volume, rsi, atr = "N/A", "N/A", "N/A", "N/A", "N/A"
         try:
             data = yf.Ticker(ticker)
+            hist = data.history(period="30d", interval="1d")  # 30d needed for RSI-14
 
-            hist = data.history(period="2d", interval="1d")
             if hist.empty or len(hist) < 2:
                 continue
 
             latest = hist.iloc[-1]
             prev = hist.iloc[-2]
 
-            price = latest["Close"]
-            change = ((latest["Close"] - prev["Close"]) / prev["Close"]) * 100
-            volume = latest["Volume"]
+            price = float(latest["Close"])
+            change = ((float(latest["Close"]) - float(prev["Close"])) / float(prev["Close"])) * 100
+            volume = float(latest["Volume"])
+            atr = float(latest["High"]) - float(latest["Low"])
 
-            delta = hist["Close"].diff()
-            gain = delta.clip(lower=0).rolling(14).mean()
-            loss = -delta.clip(upper=0).rolling(14).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs.iloc[-1])) if not rs.empty else 50
-
-            atr = latest["High"] - latest["Low"]
+            # Proper RSI-14 requires 14 periods minimum
+            if len(hist) >= 15:
+                delta = hist["Close"].diff()
+                gain = delta.clip(lower=0).rolling(14).mean()
+                loss = -delta.clip(upper=0).rolling(14).mean()
+                rs = gain / loss
+                rsi_val = 100 - (100 / (1 + rs.iloc[-1]))
+                rsi = float(rsi_val) if not math.isnan(float(rsi_val)) else 50.0
+            else:
+                rsi = 50.0
 
             yield {
                 "Ticker": ticker,
@@ -323,22 +407,18 @@ def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any]]:
 
 
 def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
-    """Build a dataframe from the raw data.
+    """Build enriched trading signal dataframe from Finviz scan + custom tickers.
 
     Args:
-        filepath: Filepath to store the enriched data.
-        filters: Filters to apply for finviz.
+        filepath: Optional path to save output (.csv, .xlsx, .json, .html).
+        filters: Finviz filter dict. Falls back to config.DEFAULT_FILTERS.
 
     Returns:
-        pd.DataFrame:
-        DataFrame with enriched data.
+        pd.DataFrame: Enriched, scored, and trade-leveled DataFrame.
     """
-    # Use caller-supplied filters or fall back to module-level defaults
     _filters = filters or config.DEFAULT_FILTERS
-
     LOGGER.info(f"Starting scan with filters: {_filters}")
 
-    # Run screeners
     foverview = Overview()
     foverview.set_filter(filters_dict=_filters)
     scan_df = foverview.screener_view()
@@ -353,12 +433,11 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
         LOGGER.warning("Technical screener returned no results — check filter values: %s", _filters)
         return pd.DataFrame(columns=FILTERED_COLUMNS)
 
-    # Build merger dataframe
     merged_df = scan_df.merge(tech_df[["Ticker", "Beta", "ATR", "SMA20", "SMA50", "RSI", "Gap"]], on="Ticker")
+
     enriched = merged_df["Ticker"].apply(enrich_ticker)
     merged_df = pd.concat([merged_df, enriched], axis=1)
 
-    # Candle signals
     signals = merged_df["Ticker"].apply(get_candle_signal)
     merged_df = pd.concat([merged_df, signals], axis=1)
 
@@ -371,31 +450,42 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     merged_df = merged_df[merged_df["RSI"] < 70]
     merged_df["Score"] = merged_df.apply(score_stock, axis=1)
     merged_df["Source"] = "Finviz"
-    custom_tickers = [
-        ticker for ticker in ticker_manager.get_all() if ticker not in set(merged_df["Ticker"].astype(str))
-    ]
 
+    # Custom tickers not already in scan
+    custom_tickers = [
+        t for t in ticker_manager.get_all() if t not in set(merged_df["Ticker"].astype(str))
+    ]
     custom_df = pd.DataFrame(list(custom_tickers_builder(custom_tickers)))
+
     if not custom_df.empty:
         LOGGER.info(f"Processing {len(custom_df)} custom tickers")
-
         enriched = custom_df["Ticker"].apply(enrich_ticker)
         custom_df = pd.concat([custom_df, enriched], axis=1)
-
         signals = custom_df["Ticker"].apply(get_candle_signal)
         custom_df = pd.concat([custom_df, signals], axis=1)
-
         custom_df["Score"] = custom_df.apply(score_stock, axis=1)
         custom_df["Source"] = "Manual"
+        # Add missing columns as NaN so concat doesn't fail
+        for col in FILTERED_COLUMNS:
+            if col not in custom_df.columns:
+                custom_df[col] = None
         custom_df = custom_df[FILTERED_COLUMNS]
 
     filtered_df = merged_df[FILTERED_COLUMNS]
-    final_df = pd.concat([filtered_df, custom_df], ignore_index=True)
+    final_df = pd.concat([filtered_df, custom_df], ignore_index=True) if not custom_df.empty else filtered_df
     final_df = final_df.drop_duplicates(subset=["Ticker"])
-    final_df = final_df.sort_values("Score", ascending=False)
+
+    # Compute and attach trade levels
+    trade_levels = final_df.apply(compute_trade_levels, axis=1)
+    final_df = pd.concat([final_df, trade_levels], axis=1)
+
+    # Only keep trades with acceptable risk/reward
+    final_df = final_df[final_df["Risk_Reward"] >= 2.0]
+    final_df = final_df.sort_values("Score", ascending=False).reset_index(drop=True)
 
     if filepath:
-        match filepath.split(".")[-1]:
+        ext = filepath.split(".")[-1]
+        match ext:
             case "csv":
                 final_df.to_csv(filepath, index=False)
             case "xlsx":
@@ -405,7 +495,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
             case "html":
                 final_df.to_html(filepath, index=False)
             case _:
-                raise ValueError("Unsupported file format. Use .csv, .xlsx, .json, or .html")
+                raise ValueError(f"Unsupported file format: .{ext}. Use .csv, .xlsx, .json, or .html")
 
     return final_df
 
@@ -413,4 +503,4 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
 if __name__ == "__main__":
     pd.set_option("display.max_columns", None)
     pd.set_option("display.max_rows", None)
-    print(builder(filepath="index.html"))
+    print(builder(filepath="main.html"))
