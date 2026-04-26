@@ -1,4 +1,7 @@
 import os
+from datetime import datetime, timedelta
+from multiprocessing.pool import ThreadPool
+from typing import List
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,11 +16,11 @@ from pytradingbot.main import (
 )
 
 # ---------------- CONFIG ----------------
-TICKERS = ["NOWL", "NXXT", "CTNT"]
-START_DATE = "2023-01-01"
-END_DATE = "2026-04-24"
+TODAY = datetime.now()
 FORWARD_DAYS = [1, 3, 5]
 INITIAL_CAPITAL = 10_000
+END_DATE = (TODAY - timedelta(days=5)).strftime("%Y-%m-%d")
+START_DATE = TODAY.replace(TODAY.year - 3).strftime("%Y-%m-%d")
 
 OUTPUT_DIR = "backtest_output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -115,39 +118,59 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+# ----------------- WORKER -----------------
+def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """Worker function to extract the dataframe for each ticker."""
+    print(f"Processing {ticker}...")
+    df = yf.download(ticker, start=start, end=end, progress=False)
+
+    if df.empty:
+        print(f"  No data for {ticker}, skipping.")
+        return df
+
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    df = df.apply(pd.to_numeric, errors="coerce").dropna()
+
+    df = compute_indicators(df)
+    df = df.dropna()  # drops NaN rows from rolling windows
+
+    res = compute_signals(df)
+
+    if res.empty:
+        print(f"  No signals for {ticker}, skipping.")
+
+    return res
+
+
 # ---------------- BACKTEST ----------------
-def run_backtest() -> pd.DataFrame:
+def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataFrame:
     """Download data, compute indicators and signals for all tickers.
 
     Returns:
         pd.DataFrame: Combined results across all tickers.
     """
     all_results = []
-    for ticker in TICKERS:
-        print(f"Processing {ticker}...")
-        df = yf.download(ticker, start=START_DATE, end=END_DATE, progress=False)
+    processes = {
+        ticker: ThreadPool(processes=1).apply_async(
+            func=worker,
+            args=(
+                ticker,
+                start_date,
+                end_date,
+            ),
+        )
+        for ticker in tickers
+    }
 
-        if df.empty:
-            print(f"  No data for {ticker}, skipping.")
+    for ticker, process in processes.items():
+        result = process.get()
+        if result.empty:
             continue
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-        df = df.apply(pd.to_numeric, errors="coerce").dropna()
-
-        df = compute_indicators(df)
-        df = df.dropna()  # drops NaN rows from rolling windows
-
-        res = compute_signals(df)
-        if res.empty:
-            print(f"  No signals for {ticker}, skipping.")
-            continue
-
-        res["Ticker"] = ticker
-        all_results.append(res)
-
+        result["Ticker"] = ticker
+        all_results.append(result)
     if not all_results:
         print("No results found across all tickers.")
         return pd.DataFrame()
@@ -326,10 +349,10 @@ def generate_html(df: pd.DataFrame) -> None:
     print(f"Report saved to {path}")
 
 
-# ---------------- MAIN ----------------
-def main() -> None:
+# ---------------- Back Tester ----------------
+def backtester(tickers: List[str], start_date: str = START_DATE, end_date: str = END_DATE) -> None:
     """Run full backtest pipeline: download, signal, analyze, plot, report."""
-    df = run_backtest()
+    df = run_backtest(tickers, start_date, end_date)
 
     if df.empty:
         print("Backtest produced no results. Check tickers and date range.")
@@ -341,4 +364,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    backtester()
