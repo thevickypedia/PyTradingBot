@@ -32,7 +32,7 @@ packages = [
     "pytradingbot.templates",
 ]
 [tool.setuptools.package-data]
-"pytradingbot.templates" = ["*.html"]
+"pytradingbot.templates" = ["*.html", "*.json"]
 
 [tool.setuptools.dynamic]
 version = { attr = "pytradingbot.version.__version__" }
