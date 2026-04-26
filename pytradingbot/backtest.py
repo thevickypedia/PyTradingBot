@@ -20,6 +20,7 @@ INITIAL_CAPITAL = 10_000
 
 OUTPUT_DIR = "backtest_output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+plt.style.use("dark_background")
 
 
 # ---------------- HELPERS ----------------
@@ -283,36 +284,43 @@ def generate_html(df: pd.DataFrame) -> None:
     top_signals["Result"] = top_signals.apply(lambda r: "✅ WIN" if r["FWD_5D"] > 0 else "❌ LOSS", axis=1)
 
     html = f"""
-    <html>
-    <head>
-        <title>Backtest Report</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; padding: 20px; }}
-            h1 {{ color: #333; }}
-            h2 {{ color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
-            table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
-            th {{ background: #333; color: white; padding: 6px; }}
-            td {{ padding: 5px; border: 1px solid #ddd; }}
-            tr:nth-child(even) {{ background: #f9f9f9; }}
-        </style>
-    </head>
-    <body>
-        <h1>Backtest Report</h1>
+<html>
+<head>
+    <title>Backtest Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; padding: 20px; }}
+        h1 {{ color: #333; }}
+        h2 {{ color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
+        table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
+        th {{ background: #333; color: white; padding: 6px; }}
+        td {{ padding: 5px; border: 1px solid #ddd; }}
+        tr:nth-child(even) {{ background: #f9f9f9; }}
+        tbody tr:nth-child(even) td {{ background: #f9f9f9; }}
+        body.night tbody tr:nth-child(even) td {{ background: #2a2a2a; }}
+    </style>
+    <!-- CSS and JS for night mode -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
+    <script type="text/javascript" src="https://thevickypedia.github.io/open-source/nightmode/night.js" defer></script>
+    <link rel="stylesheet" type="text/css" href="https://thevickypedia.github.io/open-source/nightmode/night.css">
+</head>
+<body translate="no">
+    <div class="toggler fa fa-moon-o"></div>
+    <h1>Backtest Report</h1>
 
-        <h2>Summary Statistics</h2>
-        {df[["Score", "RSI", "Change", "FWD_1D", "FWD_3D", "FWD_5D"]].describe().round(3).to_html()}
+    <h2>Summary Statistics</h2>
+    {df[["Score", "RSI", "Change", "FWD_1D", "FWD_3D", "FWD_5D"]].describe().round(3).to_html()}
 
-        <h2>Charts</h2>
-        <img src="scatter.png" width="700"/>
-        <img src="equity.png" width="700"/>
+    <h2>Charts</h2>
+    <img src="scatter.png" width="700"/>
+    <img src="equity.png" width="700"/>
 
-        <h2>Top 20 Signals by Score</h2>
-        {top_signals[["Ticker", "Score", "TD_Signal", "TD_Trend", "YF_Signal",
-                       "EMA_Cross", "RSI", "Change", "ATR", "Volume",
-                       "Entry", "Stop_Loss", "Take_Profit", "Risk_Reward",
-                       "FWD_1D", "FWD_3D", "FWD_5D", "Result"]].to_html(index=True)}
-    </body>
-    </html>
+    <h2>Top 20 Signals by Score</h2>
+    {top_signals[["Ticker", "Score", "TD_Signal", "TD_Trend", "YF_Signal",
+                    "EMA_Cross", "RSI", "Change", "ATR", "Volume",
+                    "Entry", "Stop_Loss", "Take_Profit", "Risk_Reward",
+                    "FWD_1D", "FWD_3D", "FWD_5D", "Result"]].to_html(index=True)}
+</body>
+</html>
     """
 
     path = f"{OUTPUT_DIR}/report.html"
