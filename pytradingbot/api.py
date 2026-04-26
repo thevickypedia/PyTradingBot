@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
 
 from pytradingbot import storage
+from pytradingbot.backtest_routes import backtest_run, backtest_status
 from pytradingbot.constants import LOGGER, ScanStatus, config, env
 from pytradingbot.paper_routes import (
     paper_history,
@@ -61,6 +62,12 @@ async def lifespan(app_: FastAPI):
         app_.state.scan_status,
         app_.state.schedule_config.get("enabled", True),
     )
+
+    app_.state.backtest_running = False
+    app_.state.backtest_result = None
+    app_.state.backtest_error = None
+    app_.state.backtest_tickers = []
+    app_.state.backtest_finished_at = None
 
     app_.state.scheduler = ScanScheduler(app_, trigger_scan=run_scan_job)
     app_.state.scheduler.start()
@@ -160,6 +167,20 @@ def get_routes() -> List[APIRoute]:
             path="/tickers",
             endpoint=remove_ticker,
             methods=["DELETE"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/backtest/run",
+            endpoint=backtest_run,
+            methods=["POST"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/backtest/status",
+            endpoint=backtest_status,
+            methods=["GET"],
             include_in_schema=False,
             response_class=JSONResponse,
         ),

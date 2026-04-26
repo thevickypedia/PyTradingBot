@@ -141,6 +141,38 @@
             font-size: .75rem;
         }
 
+        /* Plain Bootstrap tables inside dark cards */
+        .table-card .table thead th {
+            background: var(--surface);
+            color: var(--muted);
+            border-bottom: 2px solid var(--border) !important;
+            border-top: none !important;
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            white-space: nowrap;
+            padding: 9px 12px;
+        }
+
+        .table-card .table tbody tr {
+            background: var(--card);
+        }
+
+        .table-card .table tbody tr:nth-child(even) {
+            background: var(--bg);
+        }
+
+        .table-card .table tbody td {
+            color: var(--text);
+            border-top: 1px solid var(--border) !important;
+            padding: 8px 12px;
+            vertical-align: middle;
+        }
+
+        .table-card .table tbody tr:hover td {
+            background: rgba(88, 166, 255, .06);
+        }
+
         /* DataTable overrides */
         table.dataTable {
             border-collapse: collapse !important;
@@ -912,6 +944,9 @@
             <a class="nav-link" id="tab-paper-link" data-toggle="tab" href="#tab-paper" role="tab">💹 Paper Trading</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link" id="tab-backtest-link" data-toggle="tab" href="#tab-backtest" role="tab">📈 Backtest</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" id="tab-logs-link" data-toggle="tab" href="#tab-logs" role="tab">📋 Logs</a>
         </li>
     </ul>
@@ -1351,6 +1386,12 @@
             </div>
         </div>
         {# /tab-paper #}
+
+        <!-- ═══════════════  BACKTEST TAB  ═══════════════════ -->
+        <div class="tab-pane fade" id="tab-backtest" role="tabpanel">
+            <div id="backtestContent"></div>
+        </div>
+        {# /tab-backtest #}
 
         <!-- ═══════════════  LOGS TAB  ══════════════════════= -->
         <div class="tab-pane fade" id="tab-logs" role="tabpanel">
@@ -2474,6 +2515,251 @@
 
         $('#tab-paper-link').on('shown.bs.tab', function () { _stopPaperPoll(); loadPaperStatus(); });
         $('a[data-toggle="tab"]').not('#tab-paper-link').on('shown.bs.tab', function () { _stopPaperPoll(); });
+
+    }());
+
+    /* ══════════════════════════════════════════════════════════
+       BACKTEST
+       ══════════════════════════════════════════════════════════ */
+    (function () {
+        const SS_KEY = 'pytradingbot-backtest-report';
+        let _pollId = null;
+
+        function _esc(s) {
+            return String(s == null ? '—' : s)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function _fmt(n, digits) {
+            if (n == null) return '—';
+            return Number(n).toFixed(digits || 2);
+        }
+
+        /* ── render helpers ── */
+        function _fmtReturn(n) {
+            if (n == null) return '<span class="text-muted">—</span>';
+            const v = Number(n), cls = v > 0 ? 'color:var(--green)' : v < 0 ? 'color:var(--red)' : '', pre = v > 0 ? '+' : '';
+            return `<span style="${cls}">${pre}${_fmt(v)}%</span>`;
+        }
+        function _resultBadge(r) {
+            return r === 'WIN'
+                ? '<span class="pill pill-strong-buy" style="font-size:.72rem;">WIN</span>'
+                : '<span class="pill pill-sell" style="font-size:.72rem;">LOSS</span>';
+        }
+        function _signalBadge(s) {
+            const map = {'STRONG BUY':'pill-strong-buy','BUY':'pill-buy','NEUTRAL':'pill-neutral','SELL':'pill-sell','STRONG SELL':'pill-sell'};
+            const cls = map[String(s).toUpperCase()] || 'pill-neutral';
+            return `<span class="pill ${cls}" style="font-size:.72rem;">${_esc(s)}</span>`;
+        }
+
+        /* ── main render ── */
+        function _render(data, finishedAt) {
+            const c = document.getElementById('backtestContent');
+            if (!c) return;
+
+            if (data.error && !data.stats.total_signals) {
+                c.innerHTML = `<div class="empty-state"><span class="icon">⚠️</span><h5 style="color:var(--red);">Backtest failed</h5><p class="text-muted" style="font-size:.82rem;">${_esc(data.error)}</p></div>${_inputCard()}<div id="btLastScanned" class="text-muted" style="font-size:.75rem;margin-top:1.5rem;"></div>`;
+                _restoreLastScanned(finishedAt);
+                return;
+            }
+
+            const s = data.stats || {};
+            const corr = data.correlation || {};
+            const buckets = data.bucket_perf || [];
+            const signals = data.signals || [];
+
+            const statsHtml = `
+                <div class="row mb-3">
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Total Signals</div><div class="stat-value">${_esc(s.total_signals)}</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Score Range</div><div class="stat-value">${_esc(s.score_min)} – ${_esc(s.score_max)}</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Mean Score</div><div class="stat-value">${_esc(s.mean_score)}</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Mean RSI</div><div class="stat-value">${_esc(s.mean_rsi)}</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" style="${s.win_rate>=50?'color:var(--green)':'color:var(--red)'}">${_esc(s.win_rate)}%</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Wins / Losses</div><div class="stat-value"><span style="color:var(--green)">${_esc(s.wins)}</span> / <span style="color:var(--red)">${_esc(s.losses)}</span></div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">Open / Undecided</div><div class="stat-value">${_esc(s.open)}</div></div></div>
+                    <div class="col-6 col-md-3 mb-2"><div class="stat-card"><div class="stat-label">W/L Ratio</div><div class="stat-value">${s.wl_ratio != null ? _esc(s.wl_ratio) : '—'}</div></div></div>
+                </div>`;
+
+            const corrRows = Object.entries(corr).map(([k,v]) =>
+                `<tr><td>Score vs ${_esc(k)} Return</td><td style="${v>0?'color:var(--green)':v<0?'color:var(--red)':''}">${v != null ? _esc(v) : '—'}</td></tr>`
+            ).join('');
+            const corrHtml = corrRows ? `<div class="table-card mb-4"><div class="table-card-header"><span>📊 Score ↔ Forward Return Correlation</span></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Metric</th><th>Correlation</th></tr></thead><tbody>${corrRows}</tbody></table></div></div>` : '';
+
+            const bucketRows = buckets.map(b =>
+                `<tr><td style="font-size:.8rem;">${_esc(b.bucket)}</td><td>${_fmtReturn(b.avg_5d_return)}</td></tr>`
+            ).join('');
+            const bucketHtml = bucketRows ? `<div class="table-card mb-4"><div class="table-card-header"><span>🪣 Score Bucket vs Avg 5D Return</span></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Score Bucket</th><th>Avg 5D Return</th></tr></thead><tbody>${bucketRows}</tbody></table></div></div>` : '';
+
+            const sigRows = signals.map(r => `
+                <tr>
+                    <td style="white-space:nowrap;color:var(--muted);font-size:.76rem;">${_esc(r.Date)}</td>
+                    <td><span class="ticker">${_esc(r.Ticker)}</span></td>
+                    <td>${_esc(r.Score)}</td>
+                    <td>${_signalBadge(r.TD_Signal)}</td>
+                    <td style="font-size:.78rem;">${_esc(r.TD_Trend)}</td>
+                    <td>${_signalBadge(r.YF_Signal)}</td>
+                    <td style="font-size:.78rem;">${_esc(r.EMA_Cross)}</td>
+                    <td>${_esc(r.RSI != null ? _fmt(r.RSI, 1) : null)}</td>
+                    <td>${_esc(r.Change != null ? _fmt(r.Change, 2) : null)}</td>
+                    <td>${_esc(r.ATR != null ? _fmt(r.ATR, 4) : null)}</td>
+                    <td>${r.Entry != null ? '$'+_fmt(r.Entry,2) : '—'}</td>
+                    <td>${r.Stop_Loss != null ? '$'+_fmt(r.Stop_Loss,2) : '—'}</td>
+                    <td>${r.Take_Profit != null ? '$'+_fmt(r.Take_Profit,2) : '—'}</td>
+                    <td>${_esc(r.Risk_Reward != null ? _fmt(r.Risk_Reward, 2) : null)}</td>
+                    <td>${_fmtReturn(r.FWD_1D)}</td>
+                    <td>${_fmtReturn(r.FWD_3D)}</td>
+                    <td>${_fmtReturn(r.FWD_5D)}</td>
+                    <td>${_resultBadge(r.Result)}</td>
+                </tr>`).join('');
+            const sigHtml = sigRows
+                ? `<div class="table-card mb-4"><div class="table-card-header"><span>🏆 Signals by Score</span><small>${_esc(signals.length)} rows</small></div><table id="btSignalTable" class="table mb-0" style="font-size:.78rem;width:100%;"><thead><tr><th>Date</th><th>Ticker</th><th>Score</th><th>TD Signal</th><th>TD Trend</th><th>YF Signal</th><th>EMA Cross</th><th>RSI</th><th>Change%</th><th>ATR</th><th>Entry</th><th>Stop</th><th>Target</th><th>R:R</th><th>1D%</th><th>3D%</th><th>5D%</th><th>Result</th></tr></thead><tbody>${sigRows}</tbody></table></div>`
+                : '';
+
+            if ($.fn.DataTable.isDataTable('#btSignalTable')) {
+                $('#btSignalTable').DataTable().destroy();
+            }
+
+            c.innerHTML = `
+                ${_inputCard()}
+                <h6 class="text-muted mb-3" style="font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Summary</h6>
+                ${statsHtml}
+                ${corrHtml}
+                ${bucketHtml}
+                ${sigHtml}
+                <div id="btLastScanned" class="text-muted" style="font-size:.75rem;margin-top:1rem;"></div>`;
+
+            if (sigRows) {
+                $('#btSignalTable').DataTable({
+                    order: [[2, 'desc']],
+                    pageLength: 25,
+                    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'All']],
+                    columnDefs: [
+                        {orderable: false, targets: [3, 5, 17]},
+                        {className: 'text-center', targets: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]},
+                    ],
+                    language: {
+                        search: '', searchPlaceholder: '🔍  Filter signals…',
+                        lengthMenu: 'Show _MENU_ rows',
+                        info: 'Showing _START_–_END_ of _TOTAL_ signals',
+                        infoEmpty: 'No signals',
+                        emptyTable: 'No results',
+                        paginate: {previous: '‹', next: '›'},
+                    },
+                });
+            }
+
+            _restoreLastScanned(finishedAt);
+        }
+
+        function _inputCard(disabled) {
+            const dis = disabled ? 'disabled' : '';
+            return `<div class="row mb-4"><div class="col-xl-7 col-lg-9"><div class="ctrl-card"><div class="ctrl-card-header"><span>📈 Run Backtest</span></div><div class="ctrl-card-body">
+                <div class="form-group"><label for="btTickerInput">Tickers</label>
+                <div class="input-group"><input type="text" class="form-control" id="btTickerInput" placeholder="Enter space separated ticker symbol(s)" ${dis}><div class="input-group-append"><button class="btn btn-primary" id="btRunBtn" onclick="runBacktest()" ${dis}>▶ Run Backtest</button></div></div></div>
+                </div></div></div></div>`;
+        }
+
+        function _showScanning(tickers) {
+            const c = document.getElementById('backtestContent');
+            if (!c) return;
+            c.innerHTML = `
+                ${_inputCard(true)}
+                <div class="scanning-state" style="min-height:200px;">
+                    <div class="spinner-border text-warning"></div>
+                    <h5 class="mt-4" style="color:var(--yellow);">Scan in progress…</h5>
+                    <p class="text-muted">Fetching data for: <strong>${_esc((tickers||[]).join(', '))}</strong><br>This can take a few minutes.</p>
+                </div>
+                <div id="btLastScanned" class="text-muted" style="font-size:.75rem;margin-top:1rem;"></div>`;
+        }
+
+        function _showIdle() {
+            const c = document.getElementById('backtestContent');
+            if (!c) return;
+            c.innerHTML = `${_inputCard()}<div id="btLastScanned" class="text-muted" style="font-size:.75rem;margin-top:1rem;"></div>`;
+        }
+
+        function _restoreLastScanned(finishedAt) {
+            const el = document.getElementById('btLastScanned');
+            if (!el) return;
+            const ts = finishedAt || (function() { try { const d = JSON.parse(sessionStorage.getItem(SS_KEY)||'null'); return d && d.finished_at; } catch(e) { return null; } }());
+            if (ts) el.textContent = 'Last scanned: ' + new Date(ts).toLocaleString();
+        }
+
+        function _saveToSession(data, finishedAt) {
+            try {
+                sessionStorage.setItem(SS_KEY, JSON.stringify({ data, finished_at: finishedAt }));
+            } catch(e) {}
+        }
+
+        function _loadFromSession() {
+            try {
+                return JSON.parse(sessionStorage.getItem(SS_KEY) || 'null');
+            } catch(e) { return null; }
+        }
+
+        function _startPoll() {
+            if (_pollId) return;
+            _pollId = setInterval(function () {
+                const pane = document.getElementById('tab-backtest');
+                if (!pane || !pane.classList.contains('active')) return;
+                fetch('/backtest/status').then(r => r.json()).then(s => {
+                    if (!s.running) {
+                        clearInterval(_pollId); _pollId = null;
+                        if (s.result) {
+                            _saveToSession(s.result, s.finished_at);
+                            _render(s.result, s.finished_at);
+                        } else {
+                            const c = document.getElementById('backtestContent');
+                            if (c) c.innerHTML = `${_inputCard()}<div class="empty-state"><span class="icon">⚠️</span><h5 style="color:var(--red);">Backtest failed</h5><p class="text-muted" style="font-size:.82rem;">${_esc(s.error||'Unknown error')}</p></div><div id="btLastScanned" class="text-muted" style="font-size:.75rem;margin-top:1rem;"></div>`;
+                            _restoreLastScanned(s.finished_at);
+                        }
+                    }
+                }).catch(() => {});
+            }, 3000);
+        }
+
+        window.runBacktest = function () {
+            const input = document.getElementById('btTickerInput');
+            if (!input || !input.value.trim()) { alert('Please enter at least one ticker.'); return; }
+            const tickers = input.value.trim();
+            _showScanning(tickers.split(/\s+/));
+            fetch('/backtest/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tickers})
+            }).then(r => r.json()).then(resp => {
+                if (resp.status === 'already_running') {
+                    _showScanning(resp.tickers || []);
+                    _startPoll();
+                    return;
+                }
+                if (resp.status !== 'started') {
+                    const c = document.getElementById('backtestContent');
+                    if (c) c.innerHTML = `${_inputCard()}<div class="empty-state"><span class="icon">⚠️</span><h5 style="color:var(--red);">Error</h5><p class="text-muted" style="font-size:.82rem;">${_esc(resp.error||'Failed to start backtest')}</p></div>`;
+                    return;
+                }
+                _startPoll();
+            }).catch(err => {
+                const c = document.getElementById('backtestContent');
+                if (c) c.innerHTML = `${_inputCard()}<p class="text-danger mt-3" style="font-size:.82rem;">Network error: ${_esc(err.message)}</p>`;
+            });
+        };
+
+        /* On tab open: resume if running, restore session cache if idle */
+        $('#tab-backtest-link').on('shown.bs.tab', function () {
+            fetch('/backtest/status').then(r => r.json()).then(s => {
+                if (s.running) {
+                    _showScanning(s.tickers || []);
+                    _startPoll();
+                    return;
+                }
+                const cached = _loadFromSession();
+                if (cached && cached.data) {
+                    _render(cached.data, cached.finished_at);
+                } else {
+                    _showIdle();
+                }
+            }).catch(() => { _showIdle(); });
+        });
 
     }());
 </script>

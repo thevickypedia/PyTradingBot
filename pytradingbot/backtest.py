@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import yfinance as yf
 
+from pytradingbot.constants import LOGGER
 from pytradingbot.main import (
     compute_atr,
     compute_trade_levels,
@@ -65,15 +66,15 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Rows with signals, scores, trade levels and forward returns.
     """
     results = []
-    for i in range(50, len(df) - max(FORWARD_DAYS)):
+    for idx in range(50, len(df) - max(FORWARD_DAYS)):
         try:
-            price = float(df.iloc[i]["Close"])
-            volume = float(df.iloc[i]["Volume"])
-            ema50 = float(df.iloc[i]["EMA50"])
-            ema200 = float(df.iloc[i]["EMA200"])
+            price = float(df.iloc[idx]["Close"])
+            volume = float(df.iloc[idx]["Volume"])
+            ema50 = float(df.iloc[idx]["EMA50"])
+            ema200 = float(df.iloc[idx]["EMA200"])
 
-            row = df.iloc[i].copy()
-            window = df.iloc[max(0, i - 30) : i]  # noqa: E203
+            row = df.iloc[idx].copy()
+            window = df.iloc[max(0, idx - 30) : idx]  # noqa: E203
 
             if len(window) < 21:
                 continue
@@ -87,14 +88,15 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 
             # Pull real computed indicator values — these are already real %
             row["Volume"] = volume
-            row["RSI"] = float(df.iloc[i]["RSI"])
-            row["Change"] = float(df.iloc[i]["Change"])
-            row["ATR"] = float(df.iloc[i]["ATR"])
+            row["RSI"] = float(df.iloc[idx]["RSI"])
+            row["Change"] = float(df.iloc[idx]["Change"])
+            row["ATR"] = float(df.iloc[idx]["ATR"])
             row["Price"] = price
             # Map EMA50/EMA200 into SMA20/SMA50 column names that score_stock expects
             row["SMA20"] = ema50
             row["SMA50"] = ema200
 
+            row["Date"] = df.index[idx].strftime("%Y-%m-%d")
             row["Score"] = score_stock(row)
 
             # Compute trade levels per row
@@ -106,13 +108,13 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 
             # Forward returns
             for d in FORWARD_DAYS:
-                future_price = float(df.iloc[i + d]["Close"])
+                future_price = float(df.iloc[idx + d]["Close"])
                 row[f"FWD_{d}D"] = (future_price - price) / price * 100
 
             results.append(row)
 
-        except Exception as e:
-            print(f"Error at index {i}: {e}")
+        except Exception as error:
+            LOGGER.error("Error at index %d: %s", idx, error)
             continue
 
     return pd.DataFrame(results)
@@ -121,11 +123,11 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 # ----------------- WORKER -----------------
 def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
     """Worker function to extract the dataframe for each ticker."""
-    print(f"Processing {ticker}...")
+    LOGGER.info("Processing %s", ticker)
     df = yf.download(ticker, start=start, end=end, progress=False)
 
     if df.empty:
-        print(f"  No data for {ticker}, skipping.")
+        LOGGER.info("No data for %s, skipping.", ticker)
         return df
 
     if isinstance(df.columns, pd.MultiIndex):
@@ -140,7 +142,7 @@ def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
     res = compute_signals(df)
 
     if res.empty:
-        print(f"  No signals for {ticker}, skipping.")
+        LOGGER.warning("No signals for %s, skipping.", ticker)
 
     return res
 
@@ -172,7 +174,7 @@ def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataF
         result["Ticker"] = ticker
         all_results.append(result)
     if not all_results:
-        print("No results found across all tickers.")
+        LOGGER.warning("No results found across all tickers.")
         return pd.DataFrame()
 
     return pd.concat(all_results, ignore_index=True).dropna(subset=["Score"])
@@ -208,12 +210,12 @@ def analyze_with_levels(df: pd.DataFrame) -> None:
 
     total = wins + losses
     win_rate = (wins / total * 100) if total > 0 else 0.0
-    print(f"\nWin Rate : {win_rate:.1f}%")
-    print(f"Wins     : {wins}")
-    print(f"Losses   : {losses}")
-    print(f"Open     : {still_open}")
+    LOGGER.info(f"Win Rate : {win_rate:.1f}%")
+    LOGGER.info(f"Wins     : {wins}")
+    LOGGER.info(f"Losses   : {losses}")
+    LOGGER.info(f"Open     : {still_open}")
     if losses > 0:
-        print(f"W/L Ratio: {wins / losses:.2f}")
+        LOGGER.info(f"W/L Ratio: {wins / losses:.2f}")
 
 
 # ---------------- FULL ANALYSIS ----------------
@@ -226,24 +228,24 @@ def analyze(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Score bucket performance.
     """
-    print("\n===== ANALYSIS =====")
-    print(f"Total signals: {len(df)}")
-    print(f"Score range  : {df['Score'].min()} – {df['Score'].max()}")
-    print(f"Mean Score   : {df['Score'].mean():.1f}")
-    print(f"Mean RSI     : {df['RSI'].mean():.1f}")
-    print(f"Mean Change  : {df['Change'].apply(normalize_change).mean():.2f}%")
+    LOGGER.info("===== ANALYSIS =====")
+    LOGGER.info("Total signals: %d", len(df))
+    LOGGER.info(f"Score range  : {df['Score'].min()} – {df['Score'].max()}")
+    LOGGER.info(f"Mean Score   : {df['Score'].mean():.1f}")
+    LOGGER.info(f"Mean RSI     : {df['RSI'].mean():.1f}")
+    LOGGER.info(f"Mean Change  : {df['Change'].apply(normalize_change).mean():.2f}%")
 
     analyze_with_levels(df)
 
-    print("\n--- Score vs Forward Return Correlation ---")
+    LOGGER.info("--- Score vs Forward Return Correlation ---")
     for d in FORWARD_DAYS:
         corr = df["Score"].corr(df[f"FWD_{d}D"])
-        print(f"  Score vs {d}D Return: {corr:.3f}")
+        LOGGER.info(f"Score vs {d}D Return: {corr:.3f}")
 
     df["ScoreBucket"] = pd.qcut(df["Score"], 5, duplicates="drop")
     bucket_perf = df.groupby("ScoreBucket", observed=True)["FWD_5D"].mean()
-    print("\n--- Score Bucket vs Avg 5D Return ---")
-    print(bucket_perf)
+    LOGGER.info("--- Score Bucket vs Avg 5D Return ---")
+    LOGGER.info(bucket_perf)
 
     return bucket_perf
 
@@ -273,7 +275,7 @@ def plot_results(df: pd.DataFrame) -> None:
     top = df[df["Rank"] > 0.9].copy()
 
     if top.empty:
-        print("No top-ranked signals for equity curve.")
+        LOGGER.warning("No top-ranked signals for equity curve.")
         return
 
     equity = (1 + top["FWD_5D"] / 100).cumprod()
@@ -346,7 +348,7 @@ def generate_html(df: pd.DataFrame) -> None:
     path = f"{OUTPUT_DIR}/report.html"
     with open(path, "w") as f:
         f.write(html)
-    print(f"Report saved to {path}")
+    LOGGER.info(f"Report saved to {path}")
 
 
 # ---------------- Back Tester ----------------
@@ -355,13 +357,9 @@ def backtester(tickers: List[str], start_date: str = START_DATE, end_date: str =
     df = run_backtest(tickers, start_date, end_date)
 
     if df.empty:
-        print("Backtest produced no results. Check tickers and date range.")
+        LOGGER.warning("Backtest produced no results. Check tickers and date range.")
         return
 
     analyze(df)
     plot_results(df)
     generate_html(df)
-
-
-if __name__ == "__main__":
-    backtester()
