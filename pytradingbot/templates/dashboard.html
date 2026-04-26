@@ -616,11 +616,12 @@
             border: 1px solid #da3633;
         }
 
-        /* ── Version selector ───────────────────────────────── */
+        /* ── Version picker ──────────────────────────────────── */
         .version-wrap {
             display: flex;
             align-items: center;
             gap: 6px;
+            position: relative;
         }
 
         .version-label {
@@ -629,29 +630,117 @@
             white-space: nowrap;
         }
 
-        #versionSelect {
+        .version-picker {
+            position: relative;
+        }
+
+        .version-trigger {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             background: var(--card);
             border: 1px solid var(--border);
             color: var(--text);
             border-radius: 6px;
-            padding: 3px 26px 3px 9px;
+            padding: 3px 9px;
             font-size: .78rem;
-            max-width: 270px;
             cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
+            white-space: nowrap;
+            max-width: 270px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        #versionSelect:focus {
-            outline: none;
-            border-color: var(--blue);
+        .version-trigger:hover { border-color: var(--blue); }
+
+        .version-trigger .vt-caret {
+            flex-shrink: 0;
+            transition: transform .2s;
+            color: var(--muted);
         }
 
-        #versionSelect option {
+        .version-trigger.open .vt-caret { transform: rotate(180deg); }
+
+        .version-panel {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            min-width: 260px;
             background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.45);
+            z-index: 9999;
+            overflow: hidden;
+        }
+
+        .version-panel.open { display: block; }
+
+        .vp-date-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 12px;
+            font-size: .72rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            cursor: pointer;
+            user-select: none;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .vp-date-header:hover { color: var(--text); }
+
+        .vp-date-header .vp-caret {
+            font-size: .65rem;
+            transition: transform .2s;
+            color: var(--muted);
+        }
+
+        .vp-date-group.expanded .vp-date-header .vp-caret { transform: rotate(180deg); }
+
+        .vp-items { display: none; }
+        .vp-date-group.expanded .vp-items { display: block; }
+
+        .vp-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 14px 6px 18px;
+            font-size: .78rem;
+            color: var(--text);
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background .12s;
+            white-space: nowrap;
+        }
+
+        .vp-item:last-child { border-bottom: none; }
+        .vp-item:hover { background: var(--surface); }
+
+        .vp-item.active {
+            color: var(--blue);
+            font-weight: 600;
+        }
+
+        .vp-item .vp-count {
+            font-size: .68rem;
+            color: var(--muted);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1px 7px;
+        }
+
+        .vp-empty {
+            padding: 10px 14px;
+            font-size: .78rem;
+            color: var(--muted);
         }
 
 
@@ -664,12 +753,16 @@
 <nav class="navbar navbar-expand-sm navbar-dark">
     <a class="navbar-brand" href="/">📈 Trading Bot</a>
 
-    <!-- Version selector -->
+    <!-- Version picker -->
     <div class="version-wrap ml-3">
         <span class="version-label">📅 Version:</span>
-        <select id="versionSelect" onchange="switchVersion(this.value)" title="Switch to a previous scan snapshot">
-            <option value="">— no scans yet —</option>
-        </select>
+        <div class="version-picker" id="versionPicker">
+            <button class="version-trigger" id="versionTrigger" onclick="toggleVersionPanel(event)" title="Switch scan snapshot">
+                <span id="versionTriggerText">Loading…</span>
+                <svg class="vt-caret" width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="currentColor"/></svg>
+            </button>
+            <div class="version-panel" id="versionPanel"></div>
+        </div>
     </div>
 
     <div class="ml-auto d-flex align-items-center">
@@ -1260,32 +1353,105 @@
         $('#tab-controls-link').tab('show');
     }
 
-    /* ── Version selector ─────────────────────────────────── */
+    /* ── Version picker ────────────────────────────────────── */
     function loadVersions() {
         fetch('/versions')
             .then(r => r.json())
-            .then(versions => {
-                const sel = document.getElementById('versionSelect');
-                if (!versions || versions.length === 0) {
-                    sel.innerHTML = '<option value="">— no scans yet —</option>';
+            .then(data => {
+                const panel  = document.getElementById('versionPanel');
+                const d     = new Date();
+                const today = d.getFullYear() + '-' +
+                              String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                              String(d.getDate()).padStart(2, '0');
+
+                // data: { "YYYY-MM-DD": { "timestamp": count, … }, … }
+                const dates = Object.keys(data).sort().reverse();  // newest date first
+
+                if (!dates.length) {
+                    panel.innerHTML = '<div class="vp-empty">— no scans yet —</div>';
+                    document.getElementById('versionTriggerText').textContent = '— no scans yet —';
                     return;
                 }
-                sel.innerHTML = '';
-                versions.forEach((v, i) => {
-                    const opt = document.createElement('option');
-                    opt.value = v.timestamp;
-                    opt.textContent = `${v.timestamp}  (${v.count} stocks)`;
-                    // Highlight the version currently being viewed; fall back to newest (i===0)
-                    if (v.timestamp === CURRENT_VERSION || (!CURRENT_VERSION && i === 0)) {
-                        opt.selected = true;
-                    }
-                    sel.appendChild(opt);
+
+                panel.innerHTML = '';
+                let activeSet = false;
+
+                dates.forEach(date => {
+                    const timestamps = Object.entries(data[date])
+                        .sort((a, b) => new Date(b[0]) - new Date(a[0])); // newest time first
+
+                    const isToday   = date === today;
+                    const group     = document.createElement('div');
+                    group.className = 'vp-date-group' + (isToday ? ' expanded' : '');
+                    group.dataset.date = date;
+
+                    // Date header
+                    const header = document.createElement('div');
+                    header.className = 'vp-date-header';
+                    header.innerHTML = `<span>${date}</span><span class="vp-caret">▼</span>`;
+                    header.onclick   = (e) => { e.stopPropagation(); toggleDateGroup(group); };
+
+                    // Items container
+                    const items = document.createElement('div');
+                    items.className = 'vp-items';
+
+                    timestamps.forEach(([ts, count]) => {
+                        const isActive = ts === CURRENT_VERSION || (!CURRENT_VERSION && !activeSet && isToday);
+                        if (isActive && !activeSet) {
+                            activeSet = true;
+                            document.getElementById('versionTriggerText').textContent = ts;
+                        }
+                        const item = document.createElement('div');
+                        item.className = 'vp-item' + (isActive ? ' active' : '');
+                        item.dataset.ts = ts;
+                        item.innerHTML  = `<span>${ts}</span><span class="vp-count">${count} stocks</span>`;
+                        item.onclick    = () => switchVersion(ts);
+                        items.appendChild(item);
+                    });
+
+                    group.appendChild(header);
+                    group.appendChild(items);
+                    panel.appendChild(group);
                 });
+
+                // If nothing matched CURRENT_VERSION, label with the very first timestamp
+                if (!activeSet) {
+                    const first = panel.querySelector('.vp-item');
+                    if (first) {
+                        first.classList.add('active');
+                        document.getElementById('versionTriggerText').textContent = first.dataset.ts;
+                    }
+                }
             })
             .catch(() => {
-                document.getElementById('versionSelect').innerHTML =
-                    '<option value="">Failed to load versions</option>';
+                document.getElementById('versionPanel').innerHTML =
+                    '<div class="vp-empty">Failed to load versions</div>';
+                document.getElementById('versionTriggerText').textContent = 'Error';
             });
+    }
+
+    function toggleDateGroup(group) {
+        const isExpanded = group.classList.contains('expanded');
+        // Collapse all groups (accordion)
+        document.querySelectorAll('.vp-date-group').forEach(g => g.classList.remove('expanded'));
+        if (!isExpanded) group.classList.add('expanded');
+    }
+
+    function toggleVersionPanel(e) {
+        e.stopPropagation();
+        const trigger = document.getElementById('versionTrigger');
+        const panel   = document.getElementById('versionPanel');
+        const open    = panel.classList.toggle('open');
+        trigger.classList.toggle('open', open);
+        if (open) {
+            // Close when clicking outside
+            document.addEventListener('click', closeVersionPanel, { once: true });
+        }
+    }
+
+    function closeVersionPanel() {
+        document.getElementById('versionPanel').classList.remove('open');
+        document.getElementById('versionTrigger').classList.remove('open');
     }
 
     function switchVersion(ts) {

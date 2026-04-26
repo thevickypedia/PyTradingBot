@@ -11,6 +11,7 @@ schedule    table  — stores scheduler configuration
 import copy
 import json
 import sqlite3
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 from pytradingbot.constants import LOGGER, config
@@ -83,14 +84,14 @@ def save_scan(timestamp: str, data: List[Dict[str, Any]]) -> None:
         raise
 
 
-def list_versions() -> List[Dict[str, int]]:
+def list_versions() -> Dict[str, Dict[str, int]]:
     """Return all stored versions **newest-first** as ``[{timestamp, count}]``.
 
     Safe to call even if the DB does not exist yet (returns ``[]``).
 
     Returns:
-        List[Dict[str, int]]:
-        List of versions with timestamp and stock count, newest first.
+        Dict[str, Dict[str, int]]:
+        Key-value pairs of dates and the corresponding versions with timestamp and stock count, newest first.
     """
     try:
         _ensure_schema()
@@ -102,15 +103,16 @@ def list_versions() -> List[Dict[str, int]]:
         results = cursor.fetchall()
         conn.close()
 
-        versions = []
+        versions = defaultdict(dict)
         for timestamp, json_data in results:
             try:
                 data = json.loads(json_data)
-                versions.append({"timestamp": timestamp, "count": len(data)})
+                date_str = timestamp.split(" ")[0]
+                versions[date_str][timestamp] = len(data)
             except json.JSONDecodeError:
                 LOGGER.warning("Failed to decode JSON for timestamp %s", timestamp)
 
-        return versions
+        return dict(versions)
     except Exception as error:
         LOGGER.error("Failed to list versions: %s", error)
         return []
