@@ -112,10 +112,11 @@ def list_versions() -> Dict[str, Dict[str, int]]:
             except json.JSONDecodeError:
                 LOGGER.warning("Failed to decode JSON for timestamp %s", timestamp)
 
+        # noinspection PyTypeChecker
         return dict(versions)
     except Exception as error:
         LOGGER.error("Failed to list versions: %s", error)
-        return []
+        return {}
 
 
 def load_version(timestamp: str) -> Optional[List[Dict[str, Any]]]:

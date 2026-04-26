@@ -98,6 +98,7 @@ def _validate_time(value: str) -> str:
     return f"{h:02d}:{m:02d}"
 
 
+# noinspection PyTypeChecker
 def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
     """Normalize schedule payload.
 

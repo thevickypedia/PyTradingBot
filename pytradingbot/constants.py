@@ -43,6 +43,7 @@ def getenv(*args, default: str = None) -> str | None:
 _approved_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 
+# noinspection PyTypeChecker
 class Env:
     """Environment variables for pytradingbot.
 

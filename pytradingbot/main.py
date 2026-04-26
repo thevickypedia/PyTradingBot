@@ -86,9 +86,9 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
     try:
         if df is None or df.empty:
             assert ticker is not None, "No ticker provided."
-            df = yf.download(ticker, period="1d", interval="5m", progress=False)
+            df: pd.DataFrame | None = yf.download(ticker, period="1d", interval="5m", progress=False)
 
-        if df.empty:
+        if df is None or df.empty:
             return pd.Series(
                 {"TD_Signal": "No data", "TD_Trend": "Unknown", "YF_Signal": "No data", "EMA_Cross": "Unknown"}
             )
