@@ -386,11 +386,6 @@
             color: var(--text);
         }
 
-        .filter-row input.form-control[readonly] {
-            color: var(--muted);
-            cursor: default;
-        }
-
         .filter-row select.form-control option {
             background: var(--card);
             color: var(--text);
@@ -659,17 +654,7 @@
             background: var(--card);
         }
 
-        /* ── Cooldown pill ──────────────────────────────────── */
-        .cooldown-pill {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: .72rem;
-            font-weight: 700;
-            background: #2d2005;
-            color: var(--yellow);
-            border: 1px solid #bb8009;
-        }
+
     </style>
 </head>
 
@@ -1023,8 +1008,11 @@
                             <div id="filtersContainer">
                                 {% for key, value in filters.items() %}
                                     <div class="filter-row d-flex align-items-center mb-2">
-                                        <input class="form-control form-control-sm mr-2 filter-key" value="{{ key }}"
-                                               readonly style="flex:2;">
+                                        <select class="form-control form-control-sm mr-2 filter-key" style="flex:2;">
+                                            {% for k in filter_options.keys() %}
+                                                <option value="{{ k }}"{% if k == key %} selected{% endif %}>{{ k }}</option>
+                                            {% endfor %}
+                                        </select>
                                         <select class="form-control form-control-sm mr-2 filter-value" style="flex:3;">
                                             {% for opt in filter_options.get(key, [value]) %}
                                                 <option value="{{ opt }}"{% if opt == value %} selected{% endif %}>{{ opt }}</option>
@@ -1049,12 +1037,6 @@
                                 {% else %}No scan yet{% endif %}
                             </small>
                             <div class="d-flex align-items-center gap-2">
-                                {% if cooldown_remaining > 0 %}
-                                    <span class="cooldown-pill"
-                                          id="cooldownPill">⏱ {{ cooldown_remaining }}s cooldown</span>
-                                {% else %}
-                                    <span class="cooldown-pill d-none" id="cooldownPill"></span>
-                                {% endif %}
                                 <button class="btn btn-primary px-4" id="runScanBtn"
                                         onclick="startScan()"
                                         {% if cooldown_remaining > 0 or scan_status == 'running' %}disabled{% endif %}>
@@ -1246,6 +1228,9 @@
         renderScheduleForm(INITIAL_SCHEDULE || DEFAULT_SCHEDULE_CONFIG);
         initializeLogFilter();
 
+        // Wire key→value sync for server-rendered filter rows
+        document.querySelectorAll('#filtersContainer .filter-key').forEach(wireFilterKeyChange);
+
         // Auto-refresh logs
         $('#autoRefreshLog').on('change', function () {
             if (this.checked) {
@@ -1327,7 +1312,6 @@
     function _applyCooldownUI(secs) {
         const btn = document.getElementById('runScanBtn');
         const rescanBtn = document.getElementById('rescanBtn');
-        const pill = document.getElementById('cooldownPill');
         const cs = document.getElementById('controlStatus');
         if (btn) {
             btn.disabled = true;
@@ -1337,17 +1321,12 @@
             rescanBtn.disabled = true;
             rescanBtn.innerHTML = `⏱ ${secs}s`;
         }
-        if (pill) {
-            pill.textContent = `⏱ ${secs}s cooldown`;
-            pill.classList.remove('d-none');
-        }
         if (cs) cs.textContent = `Next scan available in ${secs}s`;
     }
 
     function _clearCooldownUI() {
         const btn = document.getElementById('runScanBtn');
         const rescanBtn = document.getElementById('rescanBtn');
-        const pill = document.getElementById('cooldownPill');
         const cs = document.getElementById('controlStatus');
         if (btn) {
             btn.disabled = false;
@@ -1356,9 +1335,6 @@
         if (rescanBtn) {
             rescanBtn.disabled = false;
             rescanBtn.innerHTML = '↺ Rescan';
-        }
-        if (pill) {
-            pill.classList.add('d-none');
         }
         if (cs) cs.textContent = 'Ready to scan';
     }
@@ -1510,6 +1486,21 @@
     }
 
     /* ── Filter editor ────────────────────────────────────── */
+    function wireFilterKeyChange(keySelect) {
+        const row = keySelect.closest('.filter-row');
+        const valSelect = row.querySelector('.filter-value');
+        keySelect.addEventListener('change', () => {
+            const opts = FILTER_OPTIONS[keySelect.value] || [];
+            valSelect.innerHTML = '';
+            opts.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                valSelect.appendChild(opt);
+            });
+        });
+    }
+
     function getFilters() {
         const filters = {};
         document.querySelectorAll('#filtersContainer .filter-row').forEach(row => {
