@@ -10,7 +10,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from pytradingbot.backtest import END_DATE, FORWARD_DAYS, START_DATE, run_backtest
 from pytradingbot.constants import LOGGER
+from pytradingbot.main import normalize_change
 
 
 class BacktestRequest(BaseModel):
@@ -43,9 +45,6 @@ def _safe(v: Any) -> Any:
 
 def _run_backtest_sync(tickers: List[str], start_date: str, end_date: str) -> Dict[str, Any]:
     """Run backtest and return a serialisable result dict."""
-    from pytradingbot.backtest import FORWARD_DAYS, run_backtest
-    from pytradingbot.main import normalize_change
-
     df = run_backtest(tickers, start_date, end_date)
     if df.empty:
         return {
@@ -153,8 +152,6 @@ async def backtest_run(request: Request, body: BacktestRequest) -> JSONResponse:
     tickers = [t.strip().upper() for t in body.tickers.split() if t.strip()]
     if not tickers:
         return JSONResponse({"status": "error", "error": "No tickers provided."}, status_code=400)
-
-    from pytradingbot.backtest import END_DATE, START_DATE
 
     start_date = body.start_date or START_DATE
     end_date = body.end_date or END_DATE
