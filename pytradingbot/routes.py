@@ -209,6 +209,7 @@ def _render(
         "scan_error": getattr(request.app.state, "scan_error", None),
         "filters": getattr(request.app.state, "current_filters", dict(config.DEFAULT_FILTERS)),
         "default_filters": dict(config.DEFAULT_FILTERS),
+        "filter_options": dict(config.FILTER_OPTIONS),
         "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(config.DEFAULT_SCHEDULE)),
         "default_schedule": copy.deepcopy(config.DEFAULT_SCHEDULE),
         "cooldown_remaining": _cooldown_remaining(request),

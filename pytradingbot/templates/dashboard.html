@@ -370,17 +370,29 @@
             justify-content: space-between;
         }
 
-        .filter-row input.form-control {
+        .filter-row input.form-control,
+        .filter-row select.form-control {
             background: var(--surface);
             border-color: var(--border);
             color: var(--text);
             font-size: .82rem;
         }
 
-        .filter-row input.form-control:focus {
+        .filter-row input.form-control:focus,
+        .filter-row select.form-control:focus {
             border-color: var(--blue);
             box-shadow: none;
             background: var(--surface);
+            color: var(--text);
+        }
+
+        .filter-row input.form-control[readonly] {
+            color: var(--muted);
+            cursor: default;
+        }
+
+        .filter-row select.form-control option {
+            background: var(--card);
             color: var(--text);
         }
 
@@ -1012,9 +1024,12 @@
                                 {% for key, value in filters.items() %}
                                     <div class="filter-row d-flex align-items-center mb-2">
                                         <input class="form-control form-control-sm mr-2 filter-key" value="{{ key }}"
-                                               placeholder="Filter key" style="flex:2;">
-                                        <input class="form-control form-control-sm mr-2 filter-value"
-                                               value="{{ value }}" placeholder="Value" style="flex:3;">
+                                               readonly style="flex:2;">
+                                        <select class="form-control form-control-sm mr-2 filter-value" style="flex:3;">
+                                            {% for opt in filter_options.get(key, [value]) %}
+                                                <option value="{{ opt }}"{% if opt == value %} selected{% endif %}>{{ opt }}</option>
+                                            {% endfor %}
+                                        </select>
                                         <button class="btn btn-sm btn-outline-danger"
                                                 style="border-color:var(--border);color:var(--muted);"
                                                 onclick="removeFilterRow(this)" title="Remove">✕
@@ -1179,6 +1194,7 @@
     /* ── Constants injected by server ─────────────────────── */
     const INITIAL_STATUS = {{ scan_status | tojson }};
     const DEFAULT_FILTERS = {{ default_filters | tojson }};
+    const FILTER_OPTIONS = {{ filter_options | tojson }};
     const INITIAL_SCHEDULE = {{ schedule | tojson }};
     const DEFAULT_SCHEDULE_CONFIG = {{ default_schedule | tojson }};
     const CURRENT_VERSION = {{ current_version | tojson }};
@@ -1505,13 +1521,53 @@
     }
 
     function addFilterRow(key = '', value = '') {
+        const keys = Object.keys(FILTER_OPTIONS);
+        const selectedKey = key || keys[0] || '';
         const d = document.createElement('div');
         d.className = 'filter-row d-flex align-items-center mb-2';
-        d.innerHTML = `
-    <input class="form-control form-control-sm mr-2 filter-key"   value="${esc(key)}"   placeholder="Filter key" style="flex:2;">
-    <input class="form-control form-control-sm mr-2 filter-value" value="${esc(value)}" placeholder="Value"      style="flex:3;">
-    <button class="btn btn-sm btn-outline-danger" style="border-color:var(--border);color:var(--muted);"
-            onclick="removeFilterRow(this)" title="Remove">✕</button>`;
+
+        // Key select
+        const keySelect = document.createElement('select');
+        keySelect.className = 'form-control form-control-sm mr-2 filter-key';
+        keySelect.style.flex = '2';
+        keys.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k;
+            if (k === selectedKey) opt.selected = true;
+            keySelect.appendChild(opt);
+        });
+
+        // Value select
+        const valSelect = document.createElement('select');
+        valSelect.className = 'form-control form-control-sm mr-2 filter-value';
+        valSelect.style.flex = '3';
+
+        function populateValues(keyName, preselect) {
+            const opts = FILTER_OPTIONS[keyName] || [];
+            valSelect.innerHTML = '';
+            opts.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                if (v === preselect) opt.selected = true;
+                valSelect.appendChild(opt);
+            });
+        }
+        populateValues(selectedKey, value);
+        keySelect.addEventListener('change', () => populateValues(keySelect.value, ''));
+
+        // Remove button
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-outline-danger';
+        btn.setAttribute('style', 'border-color:var(--border);color:var(--muted);');
+        btn.title = 'Remove';
+        btn.textContent = '✕';
+        btn.onclick = function () { removeFilterRow(this); };
+
+        d.appendChild(keySelect);
+        d.appendChild(valSelect);
+        d.appendChild(btn);
         document.getElementById('filtersContainer').appendChild(d);
     }
 

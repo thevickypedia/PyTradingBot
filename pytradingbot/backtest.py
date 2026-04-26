@@ -4,7 +4,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import yfinance as yf
 
-from pytradingbot.main import compute_trade_levels, get_candle_signal, normalize_change, score_stock
+from pytradingbot.main import (
+    compute_trade_levels,
+    get_candle_signal,
+    normalize_change,
+    score_stock,
+)
 
 # ---------------- CONFIG ----------------
 TICKERS = ["NOWL", "NXXT", "CTNT"]
@@ -69,7 +74,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     for i in range(25, len(df) - max(FORWARD_DAYS)):
         try:
             row = df.iloc[i].copy()
-            window = df.iloc[i - 5:i]
+            window = df.iloc[i - 5 : i]  # noqa: E203
 
             if len(window) < 5:
                 continue
@@ -275,9 +280,7 @@ def generate_html(df: pd.DataFrame) -> None:
 
     # Flag rows where score >= 60 and 5D return was positive
     top_signals = top_signals.copy()
-    top_signals["Result"] = top_signals.apply(
-        lambda r: "✅ WIN" if r["FWD_5D"] > 0 else "❌ LOSS", axis=1
-    )
+    top_signals["Result"] = top_signals.apply(lambda r: "✅ WIN" if r["FWD_5D"] > 0 else "❌ LOSS", axis=1)
 
     html = f"""
     <html>

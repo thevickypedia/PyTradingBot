@@ -164,9 +164,7 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
 
         ema_cross = "CROSS UP" if ema_cross_up else "CROSS DOWN" if ema_cross_down else "NO CROSS"
 
-        return pd.Series(
-            {"TD_Signal": td_signal, "TD_Trend": td_trend, "YF_Signal": yf_signal, "EMA_Cross": ema_cross}
-        )
+        return pd.Series({"TD_Signal": td_signal, "TD_Trend": td_trend, "YF_Signal": yf_signal, "EMA_Cross": ema_cross})
 
     except Exception as e:
         LOGGER.error(f"Error fetching candle data for {ticker}: {e}")
@@ -229,7 +227,7 @@ def score_stock(row: pd.Series) -> int:
     elif 8 < change <= 15:
         score += 10
     elif change > 15:
-        score += 0   # likely a top, no reward
+        score += 0  # likely a top, no reward
     elif change < 0:
         score -= 10
 
@@ -257,7 +255,7 @@ def score_stock(row: pd.Series) -> int:
     elif 1 <= atr_pct < 2:
         score += 8
     elif atr_pct > 5:
-        score += 5   # too volatile
+        score += 5  # too volatile
 
     # ---- CANDLE CONFLUENCE (max 20 pts) ----
     td = str(row.get("TD_Signal", ""))
@@ -279,13 +277,13 @@ def score_stock(row: pd.Series) -> int:
     # ---- INSIDER ACTION (max 15 pts) ----
     insider = str(row.get("Insider_Action", ""))
     if "Buy" in insider and "Proposed" not in insider:
-        score += 15   # genuine buy = strong signal
+        score += 15  # genuine buy = strong signal
     elif "Proposed" in insider and "Sale" not in insider:
-        score += 5    # scheduled buy, mild positive
+        score += 5  # scheduled buy, mild positive
     elif "Proposed Sale" in insider:
-        score -= 5    # scheduled sale, mild negative
+        score -= 5  # scheduled sale, mild negative
     elif "Sale" in insider and "Proposed" not in insider:
-        score -= 15   # genuine sale = red flag
+        score -= 15  # genuine sale = red flag
 
     return score
 
@@ -452,9 +450,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     merged_df["Source"] = "Finviz"
 
     # Custom tickers not already in scan
-    custom_tickers = [
-        t for t in ticker_manager.get_all() if t not in set(merged_df["Ticker"].astype(str))
-    ]
+    custom_tickers = [t for t in ticker_manager.get_all() if t not in set(merged_df["Ticker"].astype(str))]
     custom_df = pd.DataFrame(list(custom_tickers_builder(custom_tickers)))
 
     if not custom_df.empty:

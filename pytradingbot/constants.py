@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pathlib
@@ -97,6 +98,7 @@ handler.setFormatter(
 if not LOGGER.handlers:
     LOGGER.addHandler(hdlr=handler)
 LOGGER.propagate = False
+FILTERS_SOURCE = pathlib.Path(__file__).parent / "templates" / "filters.json"
 
 
 class Config:
@@ -116,6 +118,8 @@ class Config:
         "Change": "Up 5%",
         "RSI (14)": "Not Overbought (<60)",
     }
+
+    FILTER_OPTIONS: Dict[str, List[str]] = json.loads(FILTERS_SOURCE.read_text())
 
     TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
 
