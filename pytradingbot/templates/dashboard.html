@@ -590,6 +590,7 @@
             border-radius: 20px;
             font-weight: 700;
             letter-spacing: .04em;
+            margin-right: 8px;
         }
 
         .badge-idle {
@@ -743,11 +744,36 @@
             color: var(--muted);
         }
 
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
 
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* main content should expand */
+        .main-content {
+            flex: 1;
+        }
+
+        /* footer styling */
+        footer {
+            width: 100%;
+            color: #fff;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            font-size: small;
+            margin-top: 2%;     /* space above */
+            margin-bottom: 0%;  /* space below */
+        }
     </style>
 </head>
 
 <body>
+<div class="main-content">
 
 <!-- ══════════════════════  NAVBAR  ══════════════════════════ -->
 <nav class="navbar navbar-expand-sm navbar-dark">
@@ -2164,6 +2190,13 @@
         window.location.href = logoutEndpoint;
     }
 </script>
+</div>
 
+<footer>
+    <div class="footer">
+        PyTradingBot - {{ pkg_version }}<br>
+        <a href="https://github.com/thevickypedia/PyTradingBot">https://github.com/thevickypedia/PyTradingBot</a>
+    </div>
+</footer>
 </body>
 </html>

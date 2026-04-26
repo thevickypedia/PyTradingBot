@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from pytradingbot import storage
+from pytradingbot import storage, version
 from pytradingbot.constants import LOGGER, ScanStatus, config, env
 from pytradingbot.main import builder, get_signals, jsonify_scan_data
 from pytradingbot.telegram import send_telegram_message
@@ -215,6 +215,7 @@ def _render(
         "cooldown_remaining": _cooldown_remaining(request),
         "cooldown_seconds": env.SCAN_COOLDOWN_SECONDS,
         "current_version": current_version,
+        "pkg_version": version.__version__,
     }
 
     if env.USERNAME and env.PASSWORD:
