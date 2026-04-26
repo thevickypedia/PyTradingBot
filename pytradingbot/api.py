@@ -12,6 +12,12 @@ from fastapi.templating import Jinja2Templates
 
 from pytradingbot import storage
 from pytradingbot.constants import LOGGER, ScanStatus, config, env
+from pytradingbot.paper_routes import (
+    paper_history,
+    paper_start,
+    paper_status,
+    paper_stop,
+)
 from pytradingbot.routes import (
     dashboard,
     get_logs,
@@ -60,6 +66,12 @@ async def lifespan(app_: FastAPI):
     app_.state.scheduler.start()
     LOGGER.info("Scheduler initialized and started.")
 
+    # Paper trading engine — lazy import to keep it isolated
+    from paper_trading import PaperTradingEngine  # noqa: PLC0415
+
+    app_.state.paper_engine = PaperTradingEngine()
+    LOGGER.info("Paper trading engine initialized.")
+
     LOGGER.info("Loaded latest scan from %s with %d stocks.", latest_ts, len(latest_data))
     LOGGER.info("Server started.")
 
@@ -67,6 +79,8 @@ async def lifespan(app_: FastAPI):
 
     LOGGER.debug("Application shutdown requested.")
     await app_.state.scheduler.stop()
+    if getattr(app_.state, "paper_engine", None):
+        await app_.state.paper_engine.stop_session()
     LOGGER.info("Server stopped.")
 
 
@@ -146,6 +160,34 @@ def get_routes() -> List[APIRoute]:
             path="/tickers",
             endpoint=remove_ticker,
             methods=["DELETE"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/paper-trading/status",
+            endpoint=paper_status,
+            methods=["GET"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/paper-trading/start",
+            endpoint=paper_start,
+            methods=["POST"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/paper-trading/stop",
+            endpoint=paper_stop,
+            methods=["POST"],
+            include_in_schema=False,
+            response_class=JSONResponse,
+        ),
+        APIRoute(
+            path="/paper-trading/history",
+            endpoint=paper_history,
+            methods=["GET"],
             include_in_schema=False,
             response_class=JSONResponse,
         ),

@@ -617,6 +617,94 @@
             border: 1px solid #da3633;
         }
 
+        /* ── Paper Trading ──────────────────────────────────── */
+        .paper-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        .paper-badge-running   { background: #2d2005; color: var(--yellow); border: 1px solid #bb8009; }
+        .paper-badge-completed { background: #161b22; color: var(--muted);  border: 1px solid var(--border); }
+        .paper-badge-stopped   { background: #3d1216; color: var(--red);    border: 1px solid #da3633; }
+
+        .risk-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+        .risk-card {
+            flex: 1; min-width: 180px;
+            background: var(--surface); border: 2px solid var(--border);
+            border-radius: 10px; padding: 14px 16px;
+            cursor: pointer; transition: border-color .15s, background .15s; user-select: none;
+        }
+        .risk-card:hover  { border-color: var(--blue); background: var(--card); }
+        .risk-card.selected { border-color: var(--blue); background: rgba(88,166,255,.08); }
+        .risk-card input[type="radio"] { display: none; }
+        .risk-card-title { font-weight: 700; font-size: .88rem; margin-bottom: 6px; color: var(--text); }
+        .risk-card-title .risk-num {
+            display: inline-block; width: 22px; height: 22px; border-radius: 50%;
+            font-size: .72rem; font-weight: 700; text-align: center; line-height: 22px; margin-right: 6px;
+        }
+        .risk-num-1 { background: #163b25; color: var(--green); }
+        .risk-num-2 { background: #0d2d3b; color: var(--blue); }
+        .risk-num-3 { background: #3d1216; color: var(--red); }
+        .risk-card-sub  { font-size: .72rem; color: var(--muted); margin-bottom: 8px; }
+        .risk-card-stat { font-size: .72rem; color: var(--muted); line-height: 1.7; }
+        .risk-card-stat strong { color: var(--text); font-weight: 600; }
+
+        .paper-warn-card {
+            background: rgba(227,179,65,.08); border: 1px solid #bb8009;
+            border-radius: 10px; padding: 16px 20px;
+            display: flex; align-items: flex-start; gap: 12px; margin-bottom: 1.25rem;
+        }
+        .paper-warn-card .pw-icon { font-size: 1.3rem; flex-shrink: 0; line-height: 1; }
+        .paper-warn-card .pw-body { font-size: .84rem; color: var(--yellow); line-height: 1.5; }
+        .paper-warn-card .pw-body a { color: var(--yellow); text-decoration: underline; cursor: pointer; }
+
+        .paper-info-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem; }
+        .paper-info-cell {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 16px; min-width: 130px; flex: 1;
+        }
+        .paper-info-label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+        .paper-info-value { font-size: .9rem; font-weight: 600; color: var(--text); }
+
+        .paper-hist-expand-btn {
+            background: transparent; border: none; color: var(--muted);
+            cursor: pointer; font-size: .8rem; padding: 0; transition: color .15s;
+        }
+        .paper-hist-expand-btn:hover { color: var(--blue); }
+        .paper-trade-detail { background: var(--surface) !important; }
+        .paper-trade-detail td { padding: 0 !important; border-top: none !important; }
+        .paper-trade-inner { padding: 0 12px 14px 28px; }
+        .paper-trade-inner table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+        .paper-trade-inner table thead th {
+            background: var(--bg) !important; color: var(--muted); font-size: .68rem;
+            text-transform: uppercase; letter-spacing: .06em; padding: 7px 10px;
+            border-bottom: 1px solid var(--border); border-top: none !important;
+        }
+        .paper-trade-inner table tbody td {
+            color: var(--text); padding: 6px 10px; border-top: 1px solid var(--border) !important; vertical-align: middle;
+        }
+        .paper-error-alert {
+            background: rgba(248,81,73,.1); border: 1px solid var(--red); border-radius: 6px;
+            color: var(--red); font-size: .82rem; padding: 8px 14px; margin-top: 10px; display: none;
+        }
+        .paper-error-alert.visible { display: block; }
+        #paperCapital {
+            background: var(--surface); border: 1px solid var(--border); color: var(--text);
+            border-radius: 6px; padding: 6px 12px; font-size: .84rem; width: 160px; outline: none;
+        }
+        #paperCapital:focus { border-color: var(--blue); }
+        #paperDuration {
+            background: var(--surface); border: 1px solid var(--border); color: var(--text);
+            border-radius: 6px; padding: 6px 28px 6px 12px; font-size: .84rem; outline: none;
+        }
+        #paperDuration:focus { border-color: var(--blue); }
+        .paper-loading { text-align: center; padding: 60px 24px; color: var(--muted); font-size: .88rem; }
+
         /* ── Version picker ──────────────────────────────────── */
         .version-wrap {
             display: flex;
@@ -819,6 +907,9 @@
         </li>
         <li class="nav-item">
             <a class="nav-link" id="tab-tickers-link" data-toggle="tab" href="#tab-tickers" role="tab">📨 Tickers</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="tab-paper-link" data-toggle="tab" href="#tab-paper" role="tab">💹 Paper Trading</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" id="tab-logs-link" data-toggle="tab" href="#tab-logs" role="tab">📋 Logs</a>
@@ -1249,6 +1340,17 @@
             </div>
         </div>
         {# /tab-tickers #}
+
+        <!-- ═══════════════  PAPER TRADING TAB  ═══════════════ -->
+        <div class="tab-pane fade" id="tab-paper" role="tabpanel">
+            <div id="paperContent">
+                <div class="paper-loading">
+                    <div class="spinner-border text-secondary" style="width:2rem;height:2rem;"></div>
+                    <p class="mt-3">Loading paper trading data…</p>
+                </div>
+            </div>
+        </div>
+        {# /tab-paper #}
 
         <!-- ═══════════════  LOGS TAB  ══════════════════════= -->
         <div class="tab-pane fade" id="tab-logs" role="tabpanel">
@@ -2178,6 +2280,202 @@
     }
 
     loadTickers();
+
+    /* ══════════════════════════════════════════════════════════
+       PAPER TRADING
+       ══════════════════════════════════════════════════════════ */
+    (function () {
+        let _paperPollId = null;
+
+        const RISK_LEVELS = {
+            1: { label:'Conservative', signals:'STRONG BUY only', score:'≥ 70', rsi:'45 – 58', ema:'Required', position:'5%', stop:'−5%', target:'+8%', hold:'48 h' },
+            2: { label:'Moderate', signals:'STRONG BUY or BUY', score:'≥ 60', rsi:'45 – 65', ema:'Not required', position:'10%', stop:'−8%', target:'+15%', hold:'60 h' },
+            3: { label:'Aggressive', signals:'STRONG BUY, BUY or NEUTRAL', score:'≥ 50', rsi:'45 – 70', ema:'Not required', position:'20%', stop:'−12%', target:'+25%', hold:'72 h' },
+        };
+
+        function _esc(s) {
+            return String(s == null ? '—' : s)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function _fmt$(n) {
+            if (n == null) return '—';
+            return '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        }
+        function _fmtPnl(n) {
+            if (n == null) return '<span class="text-muted">—</span>';
+            const v = Number(n), cls = v > 0 ? 'pos' : v < 0 ? 'neg' : '', pre = v > 0 ? '+' : '';
+            return `<span class="${_esc(cls)}">${pre}${_esc(_fmt$(v))}</span>`;
+        }
+        function _paperBadge(status) {
+            const map = { running:['paper-badge-running','● Active'], completed:['paper-badge-completed','✓ Completed'], stopped:['paper-badge-stopped','■ Stopped'] };
+            const [cls, text] = map[status] || ['paper-badge-completed', _esc(status)];
+            return `<span class="paper-badge ${_esc(cls)}">${text}</span>`;
+        }
+        function _riskBadge(level) {
+            const cls  = {1:'pill-strong-buy',2:'pill-buy',3:'pill-sell'}[level] || 'pill-neutral';
+            const name = {1:'Conservative',2:'Moderate',3:'Aggressive'}[level] || `Level ${level}`;
+            return `<span class="pill ${_esc(cls)}">L${_esc(level)} ${_esc(name)}</span>`;
+        }
+
+        function _fetchStatus()  { return fetch('/paper-trading/status').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }); }
+        function _fetchHistory() { return fetch('/paper-trading/history').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }); }
+
+        window.loadPaperStatus = function () {
+            const c = document.getElementById('paperContent');
+            if (!c) return;
+            c.innerHTML = `<div class="paper-loading"><div class="spinner-border text-secondary" style="width:2rem;height:2rem;"></div><p class="mt-3">Loading paper trading data…</p></div>`;
+            Promise.all([_fetchStatus(), _fetchHistory()])
+                .then(([status, history]) => {
+                    renderPaperTab(status, history);
+                    if (status && status.is_running) _startPaperPoll();
+                })
+                .catch(err => {
+                    c.innerHTML = `<div class="empty-state"><span class="icon">⚠️</span><h5 style="color:var(--red);">Failed to load paper trading data</h5><p class="text-muted" style="font-size:.82rem;">${_esc(err.message)}</p><button class="btn-ghost mt-2" onclick="loadPaperStatus()">↺ Retry</button></div>`;
+                });
+        };
+
+        window.renderPaperTab = function (status, history) {
+            const c = document.getElementById('paperContent');
+            if (!c) return;
+            let html = '';
+            const schedEnabled = status && status.schedule_enabled;
+            if (!schedEnabled) {
+                html += `<div class="paper-warn-card"><span class="pw-icon">⚠️</span><div class="pw-body">Paper trading requires the scanner schedule to be enabled. <a onclick="$('#tab-schedule-link').tab('show')">Go to the Schedule tab</a> to enable it.</div></div>`;
+            }
+            if (status && status.is_running) {
+                html += _renderActiveSession(status);
+            } else {
+                html += _renderLaunchForm(schedEnabled);
+            }
+            const sessions = (history && history.sessions) ? history.sessions : [];
+            if (sessions.length > 0) html += _renderHistorySection(sessions);
+            c.innerHTML = html;
+            _wireRiskCards();
+        };
+
+        function _renderLaunchForm(schedEnabled) {
+            const dis = schedEnabled ? '' : 'disabled';
+            let riskHtml = '';
+            [1,2,3].forEach(lvl => {
+                const r = RISK_LEVELS[lvl], sel = lvl === 2 ? ' selected' : '', chk = lvl === 2 ? ' checked' : '';
+                riskHtml += `<label class="risk-card${sel}" data-risk="${lvl}"><input type="radio" name="paperRisk" value="${lvl}"${chk}><div class="risk-card-title"><span class="risk-num risk-num-${lvl}">${lvl}</span>${_esc(r.label)}</div><div class="risk-card-sub">${_esc(r.signals)}</div><div class="risk-card-stat"><strong>Score</strong> ${_esc(r.score)}<br><strong>RSI</strong> ${_esc(r.rsi)}<br><strong>EMA Cross</strong> ${_esc(r.ema)}<br><strong>Position</strong> ${_esc(r.position)}&nbsp;<strong>Stop</strong> ${_esc(r.stop)}&nbsp;<strong>Target</strong> ${_esc(r.target)}<br><strong>Max Hold</strong> ${_esc(r.hold)}</div></label>`;
+            });
+            return `<div class="row mb-4"><div class="col-xl-7 col-lg-9"><div class="ctrl-card"><div class="ctrl-card-header"><span>💹 Start Paper Trading Session</span></div><div class="ctrl-card-body">
+            <div class="form-group mb-3"><label class="text-muted" style="font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Duration</label><div class="mt-1"><select id="paperDuration" ${dis}><option value="1">1 Day</option><option value="2">2 Days</option><option value="3">3 Days</option><option value="4">4 Days</option><option value="5" selected>5 Days</option><option value="6">6 Days</option><option value="7">1 Week (7 Days)</option></select></div></div>
+            <div class="form-group mb-3"><label class="text-muted" style="font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Starting Capital</label><div class="mt-1 d-flex align-items-center" style="gap:6px;"><span style="color:var(--muted);font-size:.9rem;">$</span><input type="number" id="paperCapital" value="10000" min="100" step="100" ${dis}></div></div>
+            <div class="form-group mb-1"><label class="text-muted" style="font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Risk Level</label><div class="risk-cards mt-2" id="paperRiskCards">${riskHtml}</div></div>
+            <div class="paper-error-alert" id="paperLaunchError"></div>
+            </div><div class="ctrl-card-footer"><small class="text-muted" style="font-size:.78rem;">${schedEnabled ? 'Session will trade using scanner signals within market hours.' : '⚠️ Enable the schedule before starting a session.'}</small><button class="btn btn-success px-4" id="paperStartBtn" onclick="startPaperSession()" ${dis}>▶ Start Session</button></div></div></div></div>`;
+        }
+
+        function _renderActiveSession(status) {
+            const uCls = (status.unrealised_pnl || 0) >= 0 ? 'pos' : 'neg';
+            const uPre = (status.unrealised_pnl || 0) > 0 ? '+' : '';
+            const positions = status.open_positions || [];
+            let posRows = positions.length === 0
+                ? `<tr><td colspan="6" class="text-center text-muted py-3" style="font-size:.82rem;">No open positions</td></tr>`
+                : positions.map(p => `<tr><td><span class="ticker">${_esc(p.ticker)}</span></td><td>${_esc(_fmt$(p.entry_price))}</td><td>${_esc(p.shares)}</td><td>${_esc(_fmt$(p.entry_value))}</td><td>${_esc(p.hold_time||'—')}</td><td>${_esc(p.status||'—')}</td></tr>`).join('');
+            return `<div class="row mb-3"><div class="col-12"><div class="paper-info-row">
+            <div class="paper-info-cell"><div class="paper-info-label">Risk Level</div><div class="paper-info-value">${_riskBadge(status.risk_level)}</div></div>
+            <div class="paper-info-cell"><div class="paper-info-label">Duration</div><div class="paper-info-value">${_esc(status.duration_days)} day${status.duration_days===1?'':'s'}</div></div>
+            <div class="paper-info-cell"><div class="paper-info-label">Started At</div><div class="paper-info-value" style="font-size:.8rem;">${_esc(status.started_at||'—')}</div></div>
+            <div class="paper-info-cell"><div class="paper-info-label">Capital</div><div class="paper-info-value">${_esc(_fmt$(status.starting_capital))}</div></div>
+            <div class="paper-info-cell"><div class="paper-info-label">Available</div><div class="paper-info-value">${_esc(_fmt$(status.available_capital))}</div></div>
+            <div class="paper-info-cell"><div class="paper-info-label">Unrealised P&amp;L</div><div class="paper-info-value"><span class="${_esc(uCls)}">${uPre}${_esc(_fmt$(status.unrealised_pnl))}</span></div></div>
+            </div></div></div>
+            <div class="table-card mb-4"><div class="table-card-header"><span>📂 Open Positions</span><small>${_esc(positions.length)} position${positions.length===1?'':'s'}</small></div>
+            <div class="table-responsive"><table class="table mb-0"><thead><tr><th>Ticker</th><th>Entry Price</th><th>Shares</th><th>Entry Value</th><th>Hold Time</th><th>Status</th></tr></thead><tbody>${posRows}</tbody></table></div>
+            <div class="ctrl-card-footer" style="justify-content:flex-end;"><button class="btn btn-danger btn-sm px-4" onclick="stopPaperSession()">■ Stop Session</button></div></div>`;
+        }
+
+        function _renderHistorySection(sessions) {
+            let rows = '';
+            sessions.forEach((s, idx) => {
+                rows += `<tr><td><span class="ticker" style="font-size:.82rem;">${_esc(s.session_id ? s.session_id.substring(0,8)+'…' : idx+1)}</span></td><td>${_riskBadge(s.risk_level)}</td><td>${_esc(s.duration_days)} day${s.duration_days===1?'':'s'}</td><td>${_esc(_fmt$(s.starting_capital))}</td><td>${_fmtPnl(s.final_pnl)}</td><td>${_paperBadge(s.status)}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.started_at||'—')}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.ended_at||'—')}</td><td><button class="paper-hist-expand-btn" onclick="_togglePaperDetail(${idx},this,${JSON.stringify(s.trades||[]).replace(/'/g,"\\'")})" data-open="0">▶</button></td></tr><tr class="paper-trade-detail" id="paper-detail-${idx}" style="display:none;"><td colspan="9"><div class="paper-trade-inner" id="paper-trade-inner-${idx}"></div></td></tr>`;
+            });
+            return `<div class="table-card mb-5"><div class="table-card-header"><span>📜 Session History</span><small>${_esc(sessions.length)} session${sessions.length===1?'':'s'}</small></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Session</th><th>Risk</th><th>Duration</th><th>Capital</th><th>Final P&amp;L</th><th>Status</th><th>Started</th><th>Ended</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+        }
+
+        function _wireRiskCards() {
+            document.querySelectorAll('#paperRiskCards .risk-card').forEach(card => {
+                card.addEventListener('click', function () {
+                    document.querySelectorAll('#paperRiskCards .risk-card').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = true;
+                });
+            });
+        }
+
+        window._togglePaperDetail = function (idx, btn, trades) {
+            const detailRow = document.getElementById(`paper-detail-${idx}`);
+            const innerDiv  = document.getElementById(`paper-trade-inner-${idx}`);
+            const isOpen    = btn.dataset.open === '1';
+            if (isOpen) { detailRow.style.display = 'none'; btn.textContent = '▶'; btn.dataset.open = '0'; return; }
+            detailRow.style.display = ''; btn.textContent = '▼'; btn.dataset.open = '1';
+            if (!trades || !trades.length) {
+                innerDiv.innerHTML = '<p class="text-muted" style="font-size:.78rem;margin:8px 0;">No trades recorded for this session.</p>'; return;
+            }
+            const trRows = trades.map(t => `<tr><td><span class="ticker" style="font-size:.8rem;">${_esc(t.ticker)}</span></td><td>${t.action==='BUY'?'<span class="pill pill-buy">BUY</span>':'<span class="pill pill-sell">SELL</span>'}</td><td>${_esc(_fmt$(t.price))}</td><td>${_esc(t.shares)}</td><td>${_esc(_fmt$(t.value))}</td><td>${_fmtPnl(t.pnl)}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.reason||'—')}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.time||'—')}</td></tr>`).join('');
+            innerDiv.innerHTML = `<table><thead><tr><th>Ticker</th><th>Action</th><th>Price</th><th>Shares</th><th>Value</th><th>P&amp;L</th><th>Reason</th><th>Time</th></tr></thead><tbody>${trRows}</tbody></table>`;
+        };
+
+        window.startPaperSession = function () {
+            const errEl = document.getElementById('paperLaunchError');
+            if (errEl) { errEl.classList.remove('visible'); errEl.textContent = ''; }
+            const durationEl = document.getElementById('paperDuration');
+            const capitalEl  = document.getElementById('paperCapital');
+            const riskRadio  = document.querySelector('input[name="paperRisk"]:checked');
+            if (!riskRadio) { _showLaunchError('Please select a risk level.'); return; }
+            const duration = parseInt(durationEl ? durationEl.value : '5', 10);
+            const capital  = parseFloat(capitalEl ? capitalEl.value : '10000');
+            const risk     = parseInt(riskRadio.value, 10);
+            if (!Number.isFinite(capital) || capital < 100) { _showLaunchError('Starting capital must be at least $100.'); return; }
+            if (!Number.isFinite(duration) || duration < 1 || duration > 7) { _showLaunchError('Duration must be between 1 and 7 days.'); return; }
+            const btn = document.getElementById('paperStartBtn');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
+            fetch('/paper-trading/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({duration_days:duration, risk_level:risk, starting_capital:capital}) })
+                .then(r => r.json().then(d => ({ok:r.ok, data:d})))
+                .then(({ok, data}) => {
+                    if (!ok) { _showLaunchError(data.error || data.detail || 'Failed to start session.'); if (btn) { btn.disabled=false; btn.textContent='▶ Start Session'; } return; }
+                    loadPaperStatus();
+                })
+                .catch(err => { _showLaunchError('Network error: ' + err.message); if (btn) { btn.disabled=false; btn.textContent='▶ Start Session'; } });
+        };
+
+        window.stopPaperSession = function () {
+            if (!confirm('Stop the current paper trading session? Open positions will be closed at current prices.')) return;
+            fetch('/paper-trading/stop', {method:'POST'})
+                .then(r => r.json())
+                .then(() => { _stopPaperPoll(); loadPaperStatus(); })
+                .catch(err => alert('Failed to stop session: ' + err.message));
+        };
+
+        function _showLaunchError(msg) {
+            const el = document.getElementById('paperLaunchError');
+            if (!el) return;
+            el.textContent = msg; el.classList.add('visible');
+        }
+
+        function _startPaperPoll() {
+            if (_paperPollId) return;
+            _paperPollId = setInterval(function () {
+                const pane = document.getElementById('tab-paper');
+                if (!pane || !pane.classList.contains('active')) return;
+                Promise.all([_fetchStatus(), _fetchHistory()])
+                    .then(([status, history]) => { renderPaperTab(status, history); if (status && !status.is_running) _stopPaperPoll(); })
+                    .catch(() => {});
+            }, 30000);
+        }
+
+        function _stopPaperPoll() {
+            if (_paperPollId) { clearInterval(_paperPollId); _paperPollId = null; }
+        }
+
+        $('#tab-paper-link').on('shown.bs.tab', function () { _stopPaperPoll(); loadPaperStatus(); });
+        $('a[data-toggle="tab"]').not('#tab-paper-link').on('shown.bs.tab', function () { _stopPaperPoll(); });
+
+    }());
 </script>
 
 <script>
