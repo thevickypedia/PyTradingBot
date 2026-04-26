@@ -87,3 +87,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         shell: bash
+
+  release-notes:
+    needs: release
+    runs-on: thevickypedia-default
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: thevickypedia/update-release-notes@v2
+        env:
+          git_token: ${{ secrets.GIT_TOKEN }}
