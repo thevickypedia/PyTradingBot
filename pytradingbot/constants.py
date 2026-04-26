@@ -98,7 +98,6 @@ handler.setFormatter(
 if not LOGGER.handlers:
     LOGGER.addHandler(hdlr=handler)
 LOGGER.propagate = False
-FILTERS_SOURCE = pathlib.Path(__file__).parent / "templates" / "filters.json"
 
 
 class Config:
@@ -119,9 +118,8 @@ class Config:
         "RSI (14)": "Not Overbought (<60)",
     }
 
-    FILTER_OPTIONS: Dict[str, List[str]] = json.loads(FILTERS_SOURCE.read_text())
-
     TEMPLATES_DIR: pathlib.Path = pathlib.Path(__file__).parent / "templates"
+    FILTER_OPTIONS: Dict[str, List[str]] = json.loads((TEMPLATES_DIR / "filters.json").read_text())
 
     # Datastore — SQLite3 for cross-platform compatibility
     DB_PATH: str = str(env.DB_DIR / "scan_history.db")
