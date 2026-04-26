@@ -19,6 +19,7 @@ from pytradingbot.paper_routes import (
     paper_status,
     paper_stop,
 )
+from pytradingbot.paper_trading import PaperTradingEngine
 from pytradingbot.routes import (
     dashboard,
     get_logs,
@@ -72,9 +73,6 @@ async def lifespan(app_: FastAPI):
     app_.state.scheduler = ScanScheduler(app_, trigger_scan=run_scan_job)
     app_.state.scheduler.start()
     LOGGER.info("Scheduler initialized and started.")
-
-    # Paper trading engine — lazy import to keep it isolated
-    from paper_trading import PaperTradingEngine  # noqa: PLC0415
 
     app_.state.paper_engine = PaperTradingEngine()
     LOGGER.info("Paper trading engine initialized.")
