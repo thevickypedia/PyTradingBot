@@ -5,6 +5,7 @@ import pandas as pd
 import yfinance as yf
 
 from pytradingbot.main import (
+    compute_atr,
     compute_trade_levels,
     get_candle_signal,
     normalize_change,
@@ -13,7 +14,7 @@ from pytradingbot.main import (
 
 # ---------------- CONFIG ----------------
 TICKERS = ["NOWL", "NXXT", "CTNT"]
-START_DATE = "2026-01-01"
+START_DATE = "2023-01-01"
 END_DATE = "2026-04-24"
 FORWARD_DAYS = [1, 3, 5]
 INITIAL_CAPITAL = 10_000
@@ -25,15 +26,7 @@ plt.style.use("dark_background")
 
 # ---------------- HELPERS ----------------
 def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    """Compute RSI for a given price series.
-
-    Args:
-        series: Close price series.
-        period: Lookback period (default 14).
-
-    Returns:
-        pd.Series: RSI values.
-    """
+    """Compute RSI for a given price series."""
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(period).mean()
     loss = -delta.clip(upper=0).rolling(period).mean()
@@ -42,42 +35,44 @@ def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
 
 def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute RSI, ATR, Change and EMA indicators on a daily OHLCV DataFrame.
-
-    Args:
-        df: Raw OHLCV DataFrame.
-
-    Returns:
-        pd.DataFrame: DataFrame with indicator columns added.
-    """
+    """Compute RSI, true ATR, Change, EMA and SMA indicators on a daily OHLCV DataFrame."""
     df = df.copy()
     df["RSI"] = compute_rsi(df["Close"])
-    df["ATR"] = df["High"] - df["Low"]
-    df["Change"] = df["Close"].pct_change() * 100  # real % for backtest
+    df["ATR"] = compute_atr(df)  # Wilder's True Range ATR — replaces single-bar range
+    df["Change"] = df["Close"].pct_change() * 100
     df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
     df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
+    df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+    df["EMA200"] = df["Close"].ewm(span=200, adjust=False).mean()
     return df
 
 
 def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     """Walk forward through the DataFrame generating signals and forward returns.
 
-    For each row from index 25 onward, use the 5-candle window before it
-    to generate candle signals, then score the row using real indicator values.
+    For each row from index 200 onward, use the 30-candle window before it
+    to generate candle signals (enough bars for EMA21 and EMA crossover to be
+    meaningful). Rows failing price, volume, or macro-trend filters are skipped
+    before scoring so only high-quality setups reach the report.
 
     Args:
-        df: Indicator-enriched OHLCV DataFrame.
+        df: Indicator-enriched OHLCV DataFrame with EMA50/EMA200 columns.
 
     Returns:
         pd.DataFrame: Rows with signals, scores, trade levels and forward returns.
     """
     results = []
-    for i in range(25, len(df) - max(FORWARD_DAYS)):
+    for i in range(50, len(df) - max(FORWARD_DAYS)):
         try:
-            row = df.iloc[i].copy()
-            window = df.iloc[i - 5 : i]  # noqa: E203
+            price = float(df.iloc[i]["Close"])
+            volume = float(df.iloc[i]["Volume"])
+            ema50 = float(df.iloc[i]["EMA50"])
+            ema200 = float(df.iloc[i]["EMA200"])
 
-            if len(window) < 5:
+            row = df.iloc[i].copy()
+            window = df.iloc[max(0, i - 30) : i]  # noqa: E203
+
+            if len(window) < 21:
                 continue
 
             signal = get_candle_signal(df=window)
@@ -88,11 +83,14 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
             row["Insider_Action"] = "N/A"
 
             # Pull real computed indicator values — these are already real %
-            row["Volume"] = float(df.iloc[i]["Volume"])
+            row["Volume"] = volume
             row["RSI"] = float(df.iloc[i]["RSI"])
             row["Change"] = float(df.iloc[i]["Change"])
             row["ATR"] = float(df.iloc[i]["ATR"])
-            row["Price"] = float(df.iloc[i]["Close"])  # needed for trade levels + ATR%
+            row["Price"] = price
+            # Map EMA50/EMA200 into SMA20/SMA50 column names that score_stock expects
+            row["SMA20"] = ema50
+            row["SMA50"] = ema200
 
             row["Score"] = score_stock(row)
 
@@ -106,8 +104,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
             # Forward returns
             for d in FORWARD_DAYS:
                 future_price = float(df.iloc[i + d]["Close"])
-                current_price = float(row["Close"])
-                row[f"FWD_{d}D"] = (future_price - current_price) / current_price * 100
+                row[f"FWD_{d}D"] = (future_price - price) / price * 100
 
             results.append(row)
 

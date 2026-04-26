@@ -30,6 +30,23 @@ FILTERED_COLUMNS = [
 ]
 
 
+def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Compute ATR using Wilder's True Range smoothing (ewm com=period-1).
+
+    Matches the Finviz ATR display more closely than span-based ewm.
+    """
+    prev_close = df["Close"].shift(1)
+    tr = pd.concat(
+        [
+            df["High"] - df["Low"],
+            (df["High"] - prev_close).abs(),
+            (df["Low"] - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return tr.ewm(com=period - 1, adjust=False).mean()
+
+
 def normalize_change(raw: float) -> float:
     """Normalize Change value to percentage regardless of source.
 
@@ -188,7 +205,7 @@ def compute_trade_levels(row: pd.Series) -> pd.Series:
     if price == 0 or atr == 0:
         return pd.Series({"Entry": price, "Stop_Loss": None, "Take_Profit": None, "Risk_Reward": None})
 
-    stop_loss = round(price - (1.5 * atr), 2)
+    stop_loss = round(max(price * 0.85, price - (1.5 * atr)), 2)
     take_profit = round(price + (3.0 * atr), 2)
     risk = price - stop_loss
     reward = take_profit - price
@@ -254,8 +271,10 @@ def score_stock(row: pd.Series) -> int:
         score += 15
     elif 1 <= atr_pct < 2:
         score += 8
-    elif atr_pct > 5:
-        score += 5  # too volatile
+    elif 5 < atr_pct <= 15:
+        score += 0  # too volatile to score positively
+    elif atr_pct > 15:
+        score -= 10  # extreme volatility — penny-stock behavior
 
     # ---- CANDLE CONFLUENCE (max 20 pts) ----
     td = str(row.get("TD_Signal", ""))
@@ -284,6 +303,20 @@ def score_stock(row: pd.Series) -> int:
         score -= 5  # scheduled sale, mild negative
     elif "Sale" in insider and "Proposed" not in insider:
         score -= 15  # genuine sale = red flag
+
+    # ---- TREND CONFIRMATION (max 10 pts) ----
+    # SMA20/SMA50 from Finviz; EMA50/EMA200 proxies from backtest — both handled here
+    _sma20 = pd.to_numeric(row.get("SMA20", None), errors="coerce")
+    _sma50 = pd.to_numeric(row.get("SMA50", None), errors="coerce")
+    sma20 = float(_sma20) if pd.notna(_sma20) else 0.0
+    sma50 = float(_sma50) if pd.notna(_sma50) else 0.0
+    if sma20 > 0 and sma50 > 0:
+        if sma20 > sma50 and price > sma20:
+            score += 10  # price above both MAs, short above long — strong uptrend
+        elif sma20 > sma50:
+            score += 5  # MAs bullish aligned but price hasn't broken above yet
+        elif sma20 < sma50:
+            score -= 10  # short MA below long MA — underlying downtrend
 
     return score
 
@@ -371,7 +404,7 @@ def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any], None
             price = float(latest["Close"])
             change = ((float(latest["Close"]) - float(prev["Close"])) / float(prev["Close"])) * 100
             volume = float(latest["Volume"])
-            atr = float(latest["High"]) - float(latest["Low"])
+            atr = float(compute_atr(hist).iloc[-1])
 
             # Proper RSI-14 requires 14 periods minimum
             if len(hist) >= 15:
