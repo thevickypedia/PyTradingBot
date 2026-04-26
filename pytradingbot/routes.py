@@ -220,6 +220,16 @@ def _render(
     if env.USERNAME and env.PASSWORD:
         args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
 
+    if getattr(request.app.state, "scan_error"):
+        setattr(request.app.state, "scan_error", None)
+
+    if getattr(request.app.state, "scan_status") and request.app.state.scan_status == ScanStatus.ERROR:
+        if displayed_stocks:
+            status = ScanStatus.DONE
+        else:
+            status = ScanStatus.IDLE
+        setattr(request.app.state, "scan_status", status)
+
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="dashboard.html",
