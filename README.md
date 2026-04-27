@@ -61,6 +61,7 @@ docker run --name pytradingbot -p 5005:5005 -e PORT=5005 pytradingbot
 **Authentication**
 - **USERNAME**: Username to protect the server with authentication.
 - **PASSWORD**: Password to protect the server with authentication.
+- **TIMEOUT**: Time in seconds before the authentication token expires. _Defaults to 3600_
 
 **Notification setup**
 - **TELEGRAM_BOT_TOKEN**: Telegram bot token to notify the user.

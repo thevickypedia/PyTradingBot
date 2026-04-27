@@ -67,6 +67,7 @@ class Env:
     # Credentials
     USERNAME: str = getenv("username", "user")
     PASSWORD: str = getenv("password", "pass")
+    TIMEOUT: int = int(getenv("timeout", "session_timeout", default="3600"))
 
     TELEGRAM_BOT_TOKEN: str = getenv("telegram_bot_token", "telegram_token", "bot_token")
     TELEGRAM_CHAT_IDS: List[int] = [

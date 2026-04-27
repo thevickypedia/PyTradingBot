@@ -222,6 +222,7 @@ if all((env.USERNAME, env.PASSWORD)):
         app=app,
         username=env.USERNAME,
         password=env.PASSWORD,
+        timeout=env.TIMEOUT,
         routes=api_routes,
     )
 else:
