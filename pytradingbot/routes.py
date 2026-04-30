@@ -277,20 +277,18 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
 
             LOGGER.debug("Getting signals for %s scan completed with %d records.", source, len(df))
             buy, sell, fallback = get_signals(df)
-            message = f"Scan Timestamp: {ts}\n\n"
             if fallback:
-                LOGGER.info("No strong signals found. Using top 2 by score as fallback.")
-                message += "No strong signals found. Top 2 signals below:\n\n"
+                LOGGER.info("No strong signals found.")
             else:
                 LOGGER.info("Scan completed with %d strong buy and %d strong sell signals.", len(buy), len(sell))
-                message += "Scan completed. Strongest signals below:\n\n"
-            message += "Buy: {} ({})\nSell: {} ({})".format(
-                buy.iloc[0]["Ticker"] if not buy.empty else "N/A",
-                buy.iloc[0]["Score"] if not buy.empty else "N/A",
-                sell.iloc[0]["Ticker"] if not sell.empty else "N/A",
-                sell.iloc[0]["Score"] if not sell.empty else "N/A",
-            )
-            await send_telegram_message(message)
+                message = f"Scan Timestamp: {ts}\n\nScan completed. Strongest signals below:\n\n"
+                message += "Buy: {} ({})\nSell: {} ({})".format(
+                    buy.iloc[0]["Ticker"] if not buy.empty else "N/A",
+                    buy.iloc[0]["Score"] if not buy.empty else "N/A",
+                    sell.iloc[0]["Ticker"] if not sell.empty else "N/A",
+                    sell.iloc[0]["Score"] if not sell.empty else "N/A",
+                )
+                await send_telegram_message(message)
 
             data = jsonify_scan_data(df)
             storage.save_scan(ts, data)
