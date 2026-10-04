@@ -214,6 +214,7 @@ def get_routes() -> List[APIRoute]:
 
 
 app = FastAPI(title="Trading Bot Dashboard", lifespan=lifespan)
+# noinspection unresolved-references
 app.__name__ = "app"
 api_routes = get_routes()
 if all((env.USERNAME, env.PASSWORD)):
@@ -222,7 +223,7 @@ if all((env.USERNAME, env.PASSWORD)):
         app=app,
         username=env.USERNAME,
         password=env.PASSWORD,
-        timeout=env.TIMEOUT,
+        session_timeout=env.TIMEOUT,
         routes=api_routes,
     )
 else:

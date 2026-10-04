@@ -476,7 +476,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     merged_df["Volume"] = pd.to_numeric(merged_df["Volume"].astype(str).str.replace(",", ""), errors="coerce")
     merged_df["ATR"] = pd.to_numeric(merged_df["ATR"], errors="coerce")
     merged_df["RSI"] = pd.to_numeric(merged_df["RSI"], errors="coerce")
-    merged_df["Change"] = pd.to_numeric(merged_df["Change"].astype(str).str.replace("%", ""), errors="coerce")
+    merged_df["Change"] = pd.to_numeric(merged_df["Change %"].astype(str).str.replace("%", ""), errors="coerce")
 
     merged_df = merged_df[merged_df["RSI"] < 70]
     merged_df["Score"] = merged_df.apply(score_stock, axis=1)
