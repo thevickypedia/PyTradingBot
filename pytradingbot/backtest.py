@@ -5,7 +5,6 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import yfinance as yf
 
 from pytradingbot.constants import LOGGER
 from pytradingbot.main import (
@@ -15,6 +14,7 @@ from pytradingbot.main import (
     normalize_change,
     score_stock,
 )
+from pytradingbot.resilience import fetch_ohlcv
 
 # ---------------- CONFIG ----------------
 TODAY = datetime.now()
@@ -124,17 +124,10 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
     """Worker function to extract the dataframe for each ticker."""
     LOGGER.info("Processing %s", ticker)
-    df = yf.download(ticker, start=start, end=end, progress=False)
-
+    df = fetch_ohlcv(ticker, start=start, end=end)
     if df.empty:
         LOGGER.info("No data for %s, skipping.", ticker)
         return df
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-    df = df.apply(pd.to_numeric, errors="coerce").dropna()
 
     df = compute_indicators(df)
     df = df.dropna()  # drops NaN rows from rolling windows

@@ -4,12 +4,22 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
 
 from pytradingbot.constants import LOGGER, config
+from pytradingbot.resilience import (
+    FINVIZ_OVERVIEW,
+    FINVIZ_TECHNICAL,
+    clean_ohlcv,
+    fetch_ohlcv,
+    first_value,
+    num,
+    rename_aliases,
+    retry,
+    safe_call,
+)
 from pytradingbot.tickers import ticker_manager
 
 FILTERED_COLUMNS = [
@@ -71,18 +81,15 @@ def enrich_ticker(ticker: str) -> pd.Series:
     Returns:
         pd.Series: Series with latest news and insider action.
     """
-    try:
-        stock = finvizfinance(ticker)
-        news = stock.ticker_news()
-        insider = stock.ticker_inside_trader()
-        latest_news = news["Title"].iloc[0] if news is not None and not news.empty else "No news"
-        insider_action = (
-            insider["Transaction"].iloc[0] if insider is not None and not insider.empty else "No insider data"
-        )
-        return pd.Series({"Latest_News": latest_news, "Insider_Action": insider_action})
-    except Exception as err:
-        LOGGER.error(f"Error enriching ticker {ticker}: {err}")
-        return pd.Series({"Latest_News": "N/A", "Insider_Action": "N/A"})
+    stock = safe_call(lambda: finvizfinance(ticker))
+    news = safe_call(stock.ticker_news) if stock else None
+    insider = safe_call(stock.ticker_inside_trader) if stock else None
+    return pd.Series(
+        {
+            "Latest_News": first_value(news, ["Title", "Headline"], "No news"),
+            "Insider_Action": first_value(insider, ["Transaction", "Type"], "No insider data"),
+        }
+    )
 
 
 def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
@@ -103,15 +110,9 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
     try:
         if df is None or df.empty:
             assert ticker is not None, "No ticker provided."
-            df: pd.DataFrame | None = yf.download(ticker, period="1d", interval="5m", progress=False)
-
-        if df is None or df.empty:
-            return pd.Series(
-                {"TD_Signal": "No data", "TD_Trend": "Unknown", "YF_Signal": "No data", "EMA_Cross": "Unknown"}
-            )
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+            df = fetch_ohlcv(ticker, period="1d", interval="5m")
+        else:
+            df = clean_ohlcv(df)
 
         # Need at least 3 rows for meaningful comparison
         if len(df) < 3:
@@ -188,6 +189,11 @@ def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
         return pd.Series({"TD_Signal": "Error", "TD_Trend": "Error", "YF_Signal": "Error", "EMA_Cross": "Error"})
 
 
+def _f(v, default=0.0) -> float:
+    x = pd.to_numeric(v, errors="coerce")
+    return default if pd.isna(x) else float(x)
+
+
 def compute_trade_levels(row: pd.Series) -> pd.Series:
     """Compute entry, stop loss and take profit based on ATR.
 
@@ -199,8 +205,9 @@ def compute_trade_levels(row: pd.Series) -> pd.Series:
     Returns:
         pd.Series: Entry, Stop_Loss, Take_Profit, Risk_Reward.
     """
-    price = float(row.get("Price", row.get("Close", 0)) or 0)
-    atr = float(row.get("ATR", 0) or 0)
+    # compute_trade_levels
+    price = _f(row.get("Price", row.get("Close")))
+    atr = _f(row.get("ATR"))
 
     if price == 0 or atr == 0:
         return pd.Series({"Entry": price, "Stop_Loss": None, "Take_Profit": None, "Risk_Reward": None})
@@ -228,8 +235,12 @@ def score_stock(row: pd.Series) -> int:
     # Normalize change to real percentage regardless of source
     change = normalize_change(row.get("Change", 0))
 
+    volume = _f(row.get("Volume"))
+    rsi = _f(row.get("RSI"), 50)
+    atr = _f(row.get("ATR"))
+    price = _f(row.get("Price", row.get("Close")), 1)
+
     # ---- VOLUME CONVICTION (max 25 pts) ----
-    volume = float(row.get("Volume", 0) or 0)
     if volume > 5_000_000:
         score += 25
     elif volume > 2_000_000:
@@ -250,7 +261,6 @@ def score_stock(row: pd.Series) -> int:
 
     # ---- RSI ENTRY ZONE (max 25 pts) ----
     # Best entries are RSI 45-58: momentum building, not exhausted
-    rsi = float(row.get("RSI", 50) or 50)
     if 45 <= rsi <= 58:
         score += 25
     elif 58 < rsi <= 65:
@@ -264,8 +274,6 @@ def score_stock(row: pd.Series) -> int:
 
     # ---- ATR QUALITY (max 15 pts) ----
     # Reward stocks with 2-5% ATR relative to price: enough to profit, not too wild
-    atr = float(row.get("ATR", 0) or 0)
-    price = float(row.get("Price", row.get("Close", 1)) or 1)
     atr_pct = (atr / price * 100) if price > 0 else 0
     if 2 <= atr_pct <= 5:
         score += 15
@@ -392,8 +400,7 @@ def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any], None
     for ticker in tickers:
         price, change, volume, rsi, atr = "N/A", "N/A", "N/A", "N/A", "N/A"
         try:
-            data = yf.Ticker(ticker)
-            hist = data.history(period="30d", interval="1d")  # 30d needed for RSI-14
+            hist = fetch_ohlcv(ticker, history=True, period="30d", interval="1d")
 
             if hist.empty or len(hist) < 2:
                 continue
@@ -437,6 +444,13 @@ def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any], None
             }
 
 
+@retry(times=3, delay=2, default=pd.DataFrame)
+def _screen(cls, filters):
+    s = cls()
+    s.set_filter(filters_dict=filters)
+    return s.screener_view()
+
+
 def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     """Build enriched trading signal dataframe from Finviz scan + custom tickers.
 
@@ -450,21 +464,23 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     _filters = filters or config.DEFAULT_FILTERS
     LOGGER.info(f"Starting scan with filters: {_filters}")
 
-    foverview = Overview()
-    foverview.set_filter(filters_dict=_filters)
-    scan_df = foverview.screener_view()
+    scan_df = _screen(Overview, _filters)
     if scan_df is None or scan_df.empty:
         LOGGER.warning("Overview screener returned no results — check filter values: %s", _filters)
         return pd.DataFrame(columns=FILTERED_COLUMNS)
-
-    ftech = Technical()
-    ftech.set_filter(filters_dict=_filters)
-    tech_df = ftech.screener_view()
-    if tech_df is None or tech_df.empty:
-        LOGGER.warning("Technical screener returned no results — check filter values: %s", _filters)
+    scan_df = rename_aliases(scan_df, FINVIZ_OVERVIEW)
+    if scan_df["Ticker"].isna().all():
+        LOGGER.error("Finviz overview has no ticker column — aborting scan")
         return pd.DataFrame(columns=FILTERED_COLUMNS)
 
-    merged_df = scan_df.merge(tech_df[["Ticker", "Beta", "ATR", "SMA20", "SMA50", "RSI", "Gap"]], on="Ticker")
+    tech_cols = [c for c in FINVIZ_TECHNICAL if c != "Ticker"]
+    tech_df = _screen(Technical, _filters)
+    if tech_df is None or tech_df.empty:  # recover: continue with overview only
+        LOGGER.warning("Technical screener unavailable — continuing without it")
+        merged_df = scan_df.assign(**{c: np.nan for c in tech_cols})
+    else:
+        tech_df = rename_aliases(tech_df, FINVIZ_TECHNICAL)
+        merged_df = scan_df.merge(tech_df[["Ticker"] + tech_cols], on="Ticker", how="left")
 
     enriched = merged_df["Ticker"].apply(enrich_ticker)
     merged_df = pd.concat([merged_df, enriched], axis=1)
@@ -472,13 +488,10 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
     signals = merged_df["Ticker"].apply(get_candle_signal)
     merged_df = pd.concat([merged_df, signals], axis=1)
 
-    # Numeric conversions
-    merged_df["Volume"] = pd.to_numeric(merged_df["Volume"].astype(str).str.replace(",", ""), errors="coerce")
-    merged_df["ATR"] = pd.to_numeric(merged_df["ATR"], errors="coerce")
-    merged_df["RSI"] = pd.to_numeric(merged_df["RSI"], errors="coerce")
-    merged_df["Change"] = pd.to_numeric(merged_df["Change %"].astype(str).str.replace("%", ""), errors="coerce")
+    for col in ("Price", "Change", "Volume", "ATR", "RSI"):
+        merged_df[col] = num(merged_df[col])
 
-    merged_df = merged_df[merged_df["RSI"] < 70]
+    merged_df = merged_df[merged_df["RSI"].isna() | (merged_df["RSI"] < 70)]
     merged_df["Score"] = merged_df.apply(score_stock, axis=1)
     merged_df["Source"] = "Finviz"
 
@@ -500,7 +513,7 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
                 custom_df[col] = None
         custom_df = custom_df[FILTERED_COLUMNS]
 
-    filtered_df = merged_df[FILTERED_COLUMNS]
+    filtered_df = merged_df.reindex(columns=FILTERED_COLUMNS)
     final_df = pd.concat([filtered_df, custom_df], ignore_index=True) if not custom_df.empty else filtered_df
     final_df = final_df.drop_duplicates(subset=["Ticker"])
 

@@ -2430,9 +2430,10 @@
         }
 
         function _renderHistorySection(sessions) {
+            window._paperTrades = sessions.map(s => s.trades || []);
             let rows = '';
             sessions.forEach((s, idx) => {
-                rows += `<tr><td><span class="ticker" style="font-size:.82rem;">${_esc(s.session_id ? s.session_id.substring(0,8)+'…' : idx+1)}</span></td><td>${_riskBadge(s.risk_level)}</td><td>${_esc(s.duration_days)} day${s.duration_days===1?'':'s'}</td><td>${_esc(_fmt$(s.starting_capital))}</td><td>${_fmtPnl(s.final_pnl)}</td><td>${_paperBadge(s.status)}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.started_at||'—')}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.ended_at||'—')}</td><td><button class="paper-hist-expand-btn" onclick="_togglePaperDetail(${idx},this,${JSON.stringify(s.trades||[]).replace(/'/g,"\\'")})" data-open="0">▶</button></td></tr><tr class="paper-trade-detail" id="paper-detail-${idx}" style="display:none;"><td colspan="9"><div class="paper-trade-inner" id="paper-trade-inner-${idx}"></div></td></tr>`;
+                rows += `<tr><td><span class="ticker" style="font-size:.82rem;">${_esc(s.session_id ? s.session_id.substring(0,8)+'…' : idx+1)}</span></td><td>${_riskBadge(s.risk_level)}</td><td>${_esc(s.duration_days)} day${s.duration_days===1?'':'s'}</td><td>${_esc(_fmt$(s.starting_capital))}</td><td>${_fmtPnl(s.final_pnl)}</td><td>${_paperBadge(s.status)}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.started_at||'—')}</td><td style="font-size:.78rem;color:var(--muted);">${_esc(s.ended_at||'—')}</td><td><button class="paper-hist-expand-btn" onclick="_togglePaperDetail(${idx},this)" data-open="0">▶</button></td></tr><tr class="paper-trade-detail" id="paper-detail-${idx}" style="display:none;"><td colspan="9"><div class="paper-trade-inner" id="paper-trade-inner-${idx}"></div></td></tr>`;
             });
             return `<div class="table-card mb-5"><div class="table-card-header"><span>📜 Session History</span><small>${_esc(sessions.length)} session${sessions.length===1?'':'s'}</small></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Session</th><th>Risk</th><th>Duration</th><th>Capital</th><th>Final P&amp;L</th><th>Status</th><th>Started</th><th>Ended</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
         }
@@ -2449,6 +2450,7 @@
         }
 
         window._togglePaperDetail = function (idx, btn, trades) {
+            trades = trades || (window._paperTrades || [])[idx];
             const detailRow = document.getElementById(`paper-detail-${idx}`);
             const innerDiv  = document.getElementById(`paper-trade-inner-${idx}`);
             const isOpen    = btn.dataset.open === '1';

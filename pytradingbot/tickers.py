@@ -4,11 +4,11 @@ import os
 from http import HTTPStatus
 from typing import Dict, List
 
-import yfinance as yf
 from fastapi.exceptions import HTTPException
 from pydantic import BaseModel
 
-from pytradingbot.constants import LOGGER, config
+from pytradingbot.constants import config
+from pytradingbot.resilience import fetch_ohlcv
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
@@ -23,17 +23,7 @@ def check_validity(tickers: str) -> Dict[str, bool]:
         Dict[str, bool]:
         Dictionary of ticker symbols and their validity status (True if valid, False if invalid).
     """
-    tickers_list = tickers.split()
-    data = yf.download(tickers_list, period="1d", group_by="ticker", auto_adjust=False, progress=False)
-
-    results = {}
-    for ticker in tickers_list:
-        try:
-            results[ticker] = not data[ticker].empty
-        except Exception as warn:
-            LOGGER.warning(warn)
-            results[ticker] = False
-    return results
+    return {t: not fetch_ohlcv(t, period="5d").empty for t in tickers.split()}
 
 
 class TickerManager:

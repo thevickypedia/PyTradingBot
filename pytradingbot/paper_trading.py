@@ -47,11 +47,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-import yfinance as yf
-
 from pytradingbot import paper_storage, storage
 from pytradingbot.constants import LOGGER
 from pytradingbot.main import get_candle_signal
+from pytradingbot.resilience import fast_price, fetch_ohlcv
 
 # --------------------------------------------------------------------------- #
 # Risk configuration
@@ -427,17 +426,12 @@ class PaperTradingEngine:
 
     @staticmethod
     def _get_live_price(ticker: str) -> float:
-        try:
-            info = yf.Ticker(ticker).fast_info
-            price = float(getattr(info, "last_price", 0) or 0)
-            return price if price > 0 else 0.0
-        except Exception:
-            return 0.0
+        return fast_price(ticker)
 
     @staticmethod
     def _get_live_rsi(ticker: str, period: int = 14) -> Optional[float]:
         try:
-            hist = yf.Ticker(ticker).history(period="30d", interval="1d")
+            hist = fetch_ohlcv(ticker, history=True, period="30d", interval="1d")
             if hist.empty or len(hist) < period + 1:
                 return None
             delta = hist["Close"].diff()
