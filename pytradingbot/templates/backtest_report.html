@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>PyTradingBot — Backtest Report</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap"
+          rel="stylesheet"/>
+
+    <style>
+        :root {
+            --bg: #080c10;
+            --surface: #0d1117;
+            --surface2: #111820;
+            --border: #1c2333;
+            --accent: #00d4aa;
+            --accent2: #f7931a;
+            --buy: #00d4aa;
+            --sell: #ff4757;
+            --warn: #ffd166;
+            --neutral: #8892a4;
+            --text: #c9d1d9;
+            --text-dim: #6e7681;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        /* ── HEADER ─────────────────────────────────── */
+        .report-header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .brand span {
+            color: var(--accent);
+        }
+
+        .report-meta {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-align: right;
+            line-height: 1.8;
+        }
+
+        .report-meta strong {
+            color: var(--text);
+        }
+
+        /* ── LAYOUT ──────────────────────────────────── */
+        .page-body {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 32px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        /* ── SECTION TITLE ───────────────────────────── */
+        .section-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .section-title i {
+            color: var(--accent);
+            font-size: 14px;
+        }
+
+        /* ── KPI CARDS ───────────────────────────────── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .kpi-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-dim);
+        }
+
+        .kpi-value {
+            font-family: 'Syne', sans-serif;
+            font-size: 28px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .kpi-value.green {
+            color: var(--buy);
+        }
+
+        .kpi-value.red {
+            color: var(--sell);
+        }
+
+        .kpi-value.amber {
+            color: var(--warn);
+        }
+
+        .kpi-value.accent {
+            color: var(--accent);
+        }
+
+        .kpi-sub {
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        /* ── CHARTS ──────────────────────────────────── */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .chart-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-header i {
+            color: var(--accent);
+        }
+
+        .chart-body {
+            padding: 16px;
+            text-align: center;
+        }
+
+        .chart-body img {
+            max-width: 100%;
+            border-radius: 4px;
+            filter: brightness(0.95);
+        }
+
+        .chart-placeholder {
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            font-size: 12px;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-placeholder i {
+            font-size: 32px;
+            opacity: 0.3;
+        }
+
+        /* ── SUMMARY TABLE ───────────────────────────── */
+        .stats-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .stats-table-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ── MAIN TABLE ──────────────────────────────── */
+        .table-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .filter-input {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            outline: none;
+            transition: border-color .2s;
+        }
+
+        .filter-input:focus {
+            border-color: var(--accent);
+        }
+
+        .filter-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+        }
+
+        .filter-btn {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 4px;
+            padding: 5px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .filter-btn.ghost {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        table.bt-table {
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        table.bt-table thead th {
+            background: var(--surface);
+            color: var(--text-dim);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            transition: color .15s;
+        }
+
+        table.bt-table thead th:hover {
+            color: var(--accent);
+        }
+
+        table.bt-table thead th .si {
+            display: inline-block;
+            margin-left: 3px;
+            opacity: 0.3;
+            font-size: 9px;
+        }
+
+        table.bt-table thead th.asc .si,
+        table.bt-table thead th.desc .si {
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        table.bt-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background .1s;
+        }
+
+        table.bt-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        table.bt-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        table.bt-table tbody tr.win-row {
+            background: rgba(0, 212, 170, 0.05);
+        }
+
+        table.bt-table tbody tr.loss-row {
+            background: rgba(255, 71, 87, 0.05);
+        }
+
+        table.bt-table tbody td {
+            padding: 9px 12px;
+            vertical-align: middle;
+        }
+
+        .ticker-cell {
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .fwd-pos {
+            color: var(--buy);
+            font-weight: 600;
+        }
+
+        .fwd-neg {
+            color: var(--sell);
+            font-weight: 600;
+        }
+
+        .fwd-neu {
+            color: var(--text-dim);
+        }
+
+        .result-win {
+            color: var(--buy);
+            font-weight: 700;
+        }
+
+        .result-loss {
+            color: var(--sell);
+            font-weight: 700;
+        }
+
+        .signal-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .sig-STRONG-BUY {
+            background: rgba(0, 212, 170, 0.15);
+            color: var(--buy);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+        }
+
+        .sig-BUY {
+            background: rgba(0, 212, 170, 0.08);
+            color: var(--buy);
+            border: 1px solid rgba(0, 212, 170, 0.15);
+        }
+
+        .sig-SELL {
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--sell);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+
+        .sig-NEUTRAL {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--neutral);
+            border: 1px solid var(--border);
+        }
+
+        .sig-WEAK {
+            background: rgba(255, 209, 102, 0.08);
+            color: var(--warn);
+            border: 1px solid rgba(255, 209, 102, 0.2);
+        }
+
+        .score-cell {
+            font-weight: 700;
+        }
+
+        .score-high {
+            color: var(--buy);
+        }
+
+        .score-mid {
+            color: var(--warn);
+        }
+
+        .score-low {
+            color: var(--sell);
+        }
+
+        /* ── BUCKET TABLE ────────────────────────────── */
+        .bucket-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+        }
+
+        .bucket-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px 16px;
+        }
+
+        .bucket-range {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+
+        .bucket-return {
+            font-family: 'Syne', sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .bucket-return.pos {
+            color: var(--buy);
+        }
+
+        .bucket-return.neg {
+            color: var(--sell);
+        }
+
+        /* ── PAGINATION ──────────────────────────────── */
+        .table-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0 0;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .page-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .page-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all .15s;
+        }
+
+        .page-btn:hover, .page-btn.active {
+            background: var(--accent);
+            color: var(--bg);
+            border-color: var(--accent);
+        }
+
+        /* ── SUMMARY STATS TABLE ─────────────────────── */
+        table.summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        table.summary-table thead th {
+            background: var(--surface2);
+            color: var(--text-dim);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        table.summary-table tbody th {
+            background: var(--surface2);
+            color: var(--accent);
+            font-size: 11px;
+            padding: 8px 12px;
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        table.summary-table tbody td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+            text-align: right;
+        }
+
+        table.summary-table tbody tr:last-child td,
+        table.summary-table tbody tr:last-child th {
+            border-bottom: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        @media (max-width: 900px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .page-body {
+                padding: 20px 16px;
+            }
+
+            .report-header {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────── -->
+<header class="report-header">
+    <div class="brand">Py<span>Trading</span>Bot <span style="color:var(--text-dim);font-size:14px;font-weight:400">/ Backtest Report</span>
+    </div>
+    <div class="report-meta">
+        <div>Period: <strong id="meta-period">2026-01-01 → 2026-03-15</strong></div>
+        <div>Tickers: <strong id="meta-tickers">ALDX, ALLO, CDLX, DRVN, ERII, FFAI, MGRX, ONDG, QDEL, UAE</strong></div>
+        <div>Generated: <strong id="meta-date"></strong></div>
+    </div>
+</header>
+
+<div class="page-body">
+
+    <!-- ── KPI CARDS ─────────────────────────────────── -->
+    <div>
+        <div class="section-title"><i class="bi bi-graph-up"></i> Performance Summary</div>
+        <div class="kpi-grid" id="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Total Signals</div>
+                <div class="kpi-value accent" id="kpi-signals">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Win Rate</div>
+                <div class="kpi-value" id="kpi-winrate">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Wins</div>
+                <div class="kpi-value green" id="kpi-wins">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Losses</div>
+                <div class="kpi-value red" id="kpi-losses">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Avg 5D Return</div>
+                <div class="kpi-value" id="kpi-avg5d">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Avg Score</div>
+                <div class="kpi-value amber" id="kpi-avgscore">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Max Score</div>
+                <div class="kpi-value green" id="kpi-maxscore">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Avg RSI</div>
+                <div class="kpi-value" id="kpi-avgrsi">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── CHARTS ─────────────────────────────────────── -->
+    <div>
+        <div class="section-title"><i class="bi bi-bar-chart-line"></i> Charts</div>
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-header"><i class="bi bi-scatter-chart"></i> Score vs 5-Day Forward Returns</div>
+                <div class="chart-body">
+                    <img id="chart-scatter" src="scatter.png" alt="Score vs Forward Returns"
+                         onerror="this.parentNode.innerHTML='<div class=chart-placeholder><i class=bi bi-image></i><span>scatter.png not found — run backtest first</span></div>'"/>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-header"><i class="bi bi-graph-up-arrow"></i> Top Score Strategy Equity Curve</div>
+                <div class="chart-body">
+                    <img id="chart-equity" src="equity.png" alt="Equity Curve"
+                         onerror="this.parentNode.innerHTML='<div class=chart-placeholder><i class=bi bi-image></i><span>equity.png not found — run backtest first</span></div>'"/>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── STAT SUMMARY ───────────────────────────────── -->
+    <div>
+        <div class="section-title"><i class="bi bi-table"></i> Descriptive Statistics</div>
+        <div class="stats-wrap">
+            <div class="stats-table-header"><i class="bi bi-calculator"></i> Key Metrics — describe()</div>
+            <div style="overflow-x:auto;">
+                <table class="summary-table" id="summary-table">
+                    <thead>
+                    <tr id="summary-thead"></tr>
+                    </thead>
+                    <tbody id="summary-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── SCORE BUCKETS ──────────────────────────────── -->
+    <div>
+        <div class="section-title"><i class="bi bi-grid-3x2"></i> Score Bucket vs Avg 5D Return</div>
+        <div class="bucket-grid" id="bucket-grid">
+            <!-- populated by JS -->
+        </div>
+    </div>
+
+    <!-- ── TOP SIGNALS TABLE ──────────────────────────── -->
+    <div>
+        <div class="section-title"><i class="bi bi-lightning-fill"></i> Top Signals by Score</div>
+
+        <div class="table-controls">
+            <span class="filter-label">Filter</span>
+            <input class="filter-input" id="bt-search" placeholder="Search ticker…" style="width:160px"/>
+            <span class="filter-label">Signal</span>
+            <select class="filter-input" id="bt-signal">
+                <option value="">All</option>
+                <option>STRONG BUY</option>
+                <option>BUY</option>
+                <option>NEUTRAL</option>
+                <option>WEAK - WAIT</option>
+                <option>SELL</option>
+            </select>
+            <span class="filter-label">Result</span>
+            <select class="filter-input" id="bt-result">
+                <option value="">All</option>
+                <option value="WIN">✅ WIN</option>
+                <option value="LOSS">❌ LOSS</option>
+            </select>
+            <span class="filter-label">Min Score</span>
+            <input class="filter-input" id="bt-score" type="number" placeholder="0" style="width:64px"/>
+            <button class="filter-btn" onclick="btApply()">Apply</button>
+            <button class="filter-btn ghost" onclick="btReset()">Reset</button>
+        </div>
+
+        <div class="table-wrap">
+            <table class="bt-table" id="bt-table">
+                <thead>
+                <tr>
+                    <th onclick="btSort(0)">Date <span class="si">⇅</span></th>
+                    <th onclick="btSort(1)">Ticker <span class="si">⇅</span></th>
+                    <th onclick="btSort(2)">Score <span class="si">⇅</span></th>
+                    <th onclick="btSort(3)">TD Signal <span class="si">⇅</span></th>
+                    <th onclick="btSort(4)">Trend <span class="si">⇅</span></th>
+                    <th onclick="btSort(5)">YF Signal <span class="si">⇅</span></th>
+                    <th onclick="btSort(6)">EMA Cross <span class="si">⇅</span></th>
+                    <th onclick="btSort(7)">RSI <span class="si">⇅</span></th>
+                    <th onclick="btSort(8)">Change % <span class="si">⇅</span></th>
+                    <th onclick="btSort(9)">ATR <span class="si">⇅</span></th>
+                    <th onclick="btSort(10)">Volume <span class="si">⇅</span></th>
+                    <th onclick="btSort(11)">Entry <span class="si">⇅</span></th>
+                    <th onclick="btSort(12)">Stop <span class="si">⇅</span></th>
+                    <th onclick="btSort(13)">Target <span class="si">⇅</span></th>
+                    <th onclick="btSort(14)">R/R <span class="si">⇅</span></th>
+                    <th onclick="btSort(15)">1D Fwd <span class="si">⇅</span></th>
+                    <th onclick="btSort(16)">3D Fwd <span class="si">⇅</span></th>
+                    <th onclick="btSort(17)">5D Fwd <span class="si">⇅</span></th>
+                    <th onclick="btSort(18)">Result <span class="si">⇅</span></th>
+                </tr>
+                </thead>
+                <tbody id="bt-tbody"></tbody>
+            </table>
+        </div>
+
+        <div class="table-footer">
+            <span id="bt-count">Showing 0 rows</span>
+            <div class="page-btns" id="bt-pages"></div>
+        </div>
+    </div>
+
+</div><!-- /page-body -->
+
+<script>
+    // ─────────────────────────────────────────────────────
+    // SUMMARY_STATS — paste your df.describe() output here
+    // Format: { "stat_name": { "ColA": val, "ColB": val } }
+    // Generate from Python:
+    //   import json
+    //   print(df[cols].describe().round(3).to_json())
+    // ─────────────────────────────────────────────────────
+    const SUMMARY_STATS = {{ SUMMARY_STATS | safe }};
+
+    // ─────────────────────────────────────────────────────
+    // BUCKET_DATA — paste your bucket analysis here
+    // Generate from Python:
+    //   bucket_perf.reset_index().to_json(orient='records')
+    // ─────────────────────────────────────────────────────
+    const BUCKET_DATA = {{ BUCKET_DATA | safe }};
+
+    // ─────────────────────────────────────────────────────
+    // BT_DATA — paste your top signals here
+    // Generate from Python:
+    //   df.sort_values('Score',ascending=False).head(50).to_json(orient='records')
+    // ─────────────────────────────────────────────────────
+    const BT_DATA = {{ BT_DATA | safe }};
+
+    // ── HELPERS ──────────────────────────────────────────
+    const BT_PAGE_SIZE = 20;
+    let btFiltered = [...BT_DATA];
+    let btPage = 1;
+    let btSortCol = 2;
+    let btSortDir = -1;
+
+    function fmtFwd(v) {
+        if (v === null || v === undefined || isNaN(v)) return '<span class="fwd-neu">—</span>';
+        const cls = v > 0.5 ? 'fwd-pos' : v < -0.5 ? 'fwd-neg' : 'fwd-neu';
+        const sign = v > 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${Number(v).toFixed(2)}%</span>`;
+    }
+
+    function fmtVol(v) {
+        if (!v) return '—';
+        if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+        return v;
+    }
+
+    function sigBadge(s) {
+        if (!s) return '';
+        const u = s.toUpperCase().replace(/[\s-]+/g, '-');
+        let cls = 'sig-NEUTRAL';
+        if (u.includes('STRONG-BUY')) cls = 'sig-STRONG-BUY';
+        else if (u === 'BUY') cls = 'sig-BUY';
+        else if (u === 'SELL') cls = 'sig-SELL';
+        else if (u.includes('WEAK')) cls = 'sig-WEAK';
+        return `<span class="signal-badge ${cls}">${s}</span>`;
+    }
+
+    function scoreCls(s) {
+        return s >= 60 ? 'score-high' : s >= 30 ? 'score-mid' : 'score-low';
+    }
+
+    function getResult(row) {
+        // Use 5D forward return vs take profit / stop loss
+        if (row.Entry && row.Take_Profit && row.Stop_Loss) {
+            const exit = row.Entry * (1 + row.FWD_5D / 100);
+            if (exit >= row.Take_Profit) return 'WIN';
+            if (exit <= row.Stop_Loss) return 'LOSS';
+        }
+        return 'OPEN';
+    }
+
+    // ── SUMMARY TABLE ─────────────────────────────────────
+    function buildSummaryTable() {
+        const stats = Object.keys(SUMMARY_STATS);
+        const cols = Object.keys(SUMMARY_STATS[stats[0]]);
+        const thead = document.getElementById('summary-thead');
+        const tbody = document.getElementById('summary-tbody');
+
+        thead.innerHTML = '<th style="min-width:60px"></th>' +
+                cols.map(c => `<th>${c}</th>`).join('');
+
+        tbody.innerHTML = stats.map(stat => {
+            const vals = cols.map(c => {
+                const v = SUMMARY_STATS[stat][c];
+                const num = Number(v);
+                let color = '';
+                if (['FWD_1D', 'FWD_3D', 'FWD_5D', 'Change'].includes(c)) {
+                    color = num > 0 ? 'color:var(--buy)' : num < 0 ? 'color:var(--sell)' : '';
+                }
+                return `<td style="${color}">${isNaN(num) ? v : num.toFixed(3)}</td>`;
+            }).join('');
+            return `<tr><th>${stat}</th>${vals}</tr>`;
+        }).join('');
+    }
+
+    // ── BUCKET CARDS ──────────────────────────────────────
+    function buildBuckets() {
+        document.getElementById('bucket-grid').innerHTML = BUCKET_DATA.map(b => `
+    <div class="bucket-card">
+      <div class="bucket-range">${b.range}</div>
+      <div class="bucket-return ${b.avg5d >= 0 ? 'pos' : 'neg'}">${b.avg5d >= 0 ? '+' : ''}${b.avg5d.toFixed(1)}%</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Avg 5D Return</div>
+    </div>`).join('');
+    }
+
+    // ── KPI CARDS ─────────────────────────────────────────
+    function buildKPIs() {
+        const data = BT_DATA;
+        const results = data.map(getResult);
+        const wins = results.filter(r => r === 'WIN').length;
+        const losses = results.filter(r => r === 'LOSS').length;
+        const total = wins + losses;
+        const wr = total > 0 ? (wins / total * 100).toFixed(1) : 0;
+        const avg5d = data.reduce((a, b) => a + (b.FWD_5D || 0), 0) / (data.length || 1);
+        const avgsc = data.reduce((a, b) => a + (b.Score || 0), 0) / (data.length || 1);
+        const maxsc = Math.max(...data.map(r => r.Score || 0));
+        const avgrsi = data.reduce((a, b) => a + (b.RSI || 0), 0) / (data.length || 1);
+
+        document.getElementById('kpi-signals').textContent = data.length;
+        document.getElementById('kpi-winrate').textContent = wr + '%';
+        document.getElementById('kpi-winrate').className = 'kpi-value ' + (parseFloat(wr) >= 50 ? 'green' : 'red');
+        document.getElementById('kpi-wins').textContent = wins;
+        document.getElementById('kpi-losses').textContent = losses;
+        document.getElementById('kpi-avg5d').textContent = (avg5d >= 0 ? '+' : '') + avg5d.toFixed(2) + '%';
+        document.getElementById('kpi-avg5d').className = 'kpi-value ' + (avg5d >= 0 ? 'green' : 'red');
+        document.getElementById('kpi-avgscore').textContent = avgsc.toFixed(1);
+        document.getElementById('kpi-maxscore').textContent = maxsc;
+        document.getElementById('kpi-avgrsi').textContent = avgrsi.toFixed(1);
+
+        document.getElementById('meta-date').textContent = new Date().toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+        });
+    }
+
+    // ── BT TABLE ──────────────────────────────────────────
+    const BT_KEYS = ['Date', 'Ticker', 'Score', 'TD_Signal', 'TD_Trend', 'YF_Signal', 'EMA_Cross',
+        'RSI', 'Change', 'ATR', 'Volume', 'Entry', 'Stop_Loss', 'Take_Profit', 'Risk_Reward',
+        'FWD_1D', 'FWD_3D', 'FWD_5D', '_Result'];
+
+    function btGetVal(row, col) {
+        if (BT_KEYS[col] === '_Result') return getResult(row);
+        return row[BT_KEYS[col]];
+    }
+
+    function btBuildRow(row) {
+        const result = getResult(row);
+        const rowCls = result === 'WIN' ? 'win-row' : result === 'LOSS' ? 'loss-row' : '';
+        const resCls = result === 'WIN' ? 'result-win' : result === 'LOSS' ? 'result-loss' : 'fwd-neu';
+        const resIcon = result === 'WIN' ? '✅ WIN' : result === 'LOSS' ? '❌ LOSS' : '⏳ OPEN';
+
+        return `<tr class="${rowCls}">
+    <td style="color:var(--text-dim)">${row.Date}</td>
+    <td class="ticker-cell">${row.Ticker}</td>
+    <td><span class="score-cell ${scoreCls(row.Score)}">${row.Score}</span></td>
+    <td>${sigBadge(row.TD_Signal)}</td>
+    <td style="color:${row.TD_Trend==='UPTREND'?'var(--buy)':row.TD_Trend==='DOWNTREND'?'var(--sell)':'var(--warn)'}">${row.TD_Trend}</td>
+    <td>${sigBadge(row.YF_Signal)}</td>
+    <td style="color:${row.EMA_Cross==='CROSS UP'?'var(--buy)':row.EMA_Cross==='CROSS DOWN'?'var(--sell)':'var(--text-dim)'}">${row.EMA_Cross}</td>
+    <td style="color:${row.RSI>70?'var(--sell)':row.RSI<40?'var(--warn)':'var(--text)'}">${Number(row.RSI).toFixed(1)}</td>
+    <td>${fmtFwd(row.Change)}</td>
+    <td>${Number(row.ATR).toFixed(3)}</td>
+    <td>${fmtVol(row.Volume)}</td>
+    <td>$${Number(row.Entry||0).toFixed(2)}</td>
+    <td style="color:var(--sell)">$${Number(row.Stop_Loss||0).toFixed(2)}</td>
+    <td style="color:var(--buy)">$${Number(row.Take_Profit||0).toFixed(2)}</td>
+    <td style="color:var(--warn)">${Number(row.Risk_Reward||0).toFixed(1)}x</td>
+    <td>${fmtFwd(row.FWD_1D)}</td>
+    <td>${fmtFwd(row.FWD_3D)}</td>
+    <td>${fmtFwd(row.FWD_5D)}</td>
+    <td class="${resCls}">${resIcon}</td>
+  </tr>`;
+    }
+
+    function btRender() {
+        const start = (btPage - 1) * BT_PAGE_SIZE;
+        const page = btFiltered.slice(start, start + BT_PAGE_SIZE);
+        document.getElementById('bt-tbody').innerHTML =
+                page.length ? page.map(btBuildRow).join('') :
+                        '<tr><td colspan="19" style="text-align:center;padding:40px;color:var(--text-dim)">No signals match current filters</td></tr>';
+
+        document.getElementById('bt-count').textContent =
+                `Showing ${start+1}–${Math.min(start+BT_PAGE_SIZE, btFiltered.length)} of ${btFiltered.length} signals`;
+
+        const totalPages = Math.ceil(btFiltered.length / BT_PAGE_SIZE);
+        const pbEl = document.getElementById('bt-pages');
+        pbEl.innerHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const b = document.createElement('button');
+            b.className = 'page-btn' + (i === btPage ? ' active' : '');
+            b.textContent = i;
+            b.onclick = () => {
+                btPage = i;
+                btRender();
+            };
+            pbEl.appendChild(b);
+        }
+    }
+
+    function btSort(col) {
+        if (btSortCol === col) btSortDir *= -1;
+        else {
+            btSortCol = col;
+            btSortDir = -1;
+        }
+
+        btFiltered.sort((a, b) => {
+            const va = btGetVal(a, col), vb = btGetVal(b, col);
+            if (typeof va === 'number') return (va - vb) * btSortDir;
+            return String(va).localeCompare(String(vb)) * btSortDir;
+        });
+
+        document.querySelectorAll('#bt-table thead th').forEach((th, i) => {
+            th.classList.remove('asc', 'desc');
+            if (i === col) th.classList.add(btSortDir === 1 ? 'asc' : 'desc');
+        });
+
+        btPage = 1;
+        btRender();
+    }
+
+    function btApply() {
+        const search = document.getElementById('bt-search').value.toLowerCase();
+        const signal = document.getElementById('bt-signal').value;
+        const result = document.getElementById('bt-result').value;
+        const minScore = parseFloat(document.getElementById('bt-score').value) || -Infinity;
+
+        btFiltered = BT_DATA.filter(row => {
+            const r = getResult(row);
+            return (!search || row.Ticker.toLowerCase().includes(search)) &&
+                    (!signal || row.TD_Signal === signal || row.YF_Signal === signal) &&
+                    (!result || r === result) &&
+                    (row.Score || 0) >= minScore;
+        });
+
+        btFiltered.sort((a, b) => {
+            const va = btGetVal(a, btSortCol), vb = btGetVal(b, btSortCol);
+            if (typeof va === 'number') return (va - vb) * btSortDir;
+            return String(va).localeCompare(String(vb)) * btSortDir;
+        });
+
+        btPage = 1;
+        btRender();
+    }
+
+    function btReset() {
+        document.getElementById('bt-search').value = '';
+        document.getElementById('bt-signal').value = '';
+        document.getElementById('bt-result').value = '';
+        document.getElementById('bt-score').value = '';
+        btFiltered = [...BT_DATA];
+        btSortCol = 2;
+        btSortDir = -1;
+        btSort(2);
+    }
+
+    // ── INIT ─────────────────────────────────────────────
+    buildKPIs();
+    buildSummaryTable();
+    buildBuckets();
+    btSort(2);
+
+    document.getElementById('bt-search').addEventListener('input', btApply);
+    document.getElementById('bt-signal').addEventListener('change', btApply);
+    document.getElementById('bt-result').addEventListener('change', btApply);
+</script>
+</body>
+</html>
