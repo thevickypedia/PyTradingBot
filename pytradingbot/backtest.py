@@ -1,3 +1,5 @@
+import json
+import math
 import os
 from datetime import datetime, timedelta
 from multiprocessing.pool import ThreadPool
@@ -8,6 +10,7 @@ import pandas as pd
 
 from pytradingbot.constants import LOGGER
 from pytradingbot.main import (
+    _jinja_env,
     compute_atr,
     compute_trade_levels,
     get_candle_signal,
@@ -21,7 +24,7 @@ TODAY = datetime.now()
 FORWARD_DAYS = [1, 3, 5]
 INITIAL_CAPITAL = 10_000
 END_DATE = (TODAY - timedelta(days=5)).strftime("%Y-%m-%d")
-START_DATE = TODAY.replace(TODAY.year - 3).strftime("%Y-%m-%d")
+START_DATE = TODAY.replace(year=TODAY.year - 3).strftime("%Y-%m-%d")
 
 OUTPUT_DIR = "backtest_output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -42,7 +45,7 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Compute RSI, true ATR, Change, EMA and SMA indicators on a daily OHLCV DataFrame."""
     df = df.copy()
     df["RSI"] = compute_rsi(df["Close"])
-    df["ATR"] = compute_atr(df)  # Wilder's True Range ATR — replaces single-bar range
+    df["ATR"] = compute_atr(df)  # Wilder's True Range ATR from main.py
     df["Change"] = df["Close"].pct_change() * 100
     df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
     df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
@@ -54,10 +57,10 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     """Walk forward through the DataFrame generating signals and forward returns.
 
-    For each row from index 200 onward, use the 30-candle window before it
-    to generate candle signals (enough bars for EMA21 and EMA crossover to be
-    meaningful). Rows failing price, volume, or macro-trend filters are skipped
-    before scoring so only high-quality setups reach the report.
+    For each row from index 50 onward, use a 30-candle window before it to
+    generate candle signals (enough bars for EMA21 crossover to be meaningful).
+    Rows failing price, volume, or macro-trend filters are skipped before
+    scoring so only high-quality setups reach the report.
 
     Args:
         df: Indicator-enriched OHLCV DataFrame with EMA50/EMA200 columns.
@@ -86,20 +89,20 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
             row["EMA_Cross"] = signal["EMA_Cross"]
             row["Insider_Action"] = "N/A"
 
-            # Pull real computed indicator values — these are already real %
+            # Pull real computed indicator values — Change is already real %
             row["Volume"] = volume
             row["RSI"] = float(df.iloc[idx]["RSI"])
             row["Change"] = float(df.iloc[idx]["Change"])
             row["ATR"] = float(df.iloc[idx]["ATR"])
             row["Price"] = price
-            # Map EMA50/EMA200 into SMA20/SMA50 column names that score_stock expects
+            # Map EMA50/EMA200 into column names score_stock expects
             row["SMA20"] = ema50
             row["SMA50"] = ema200
 
             row["Date"] = df.index[idx].strftime("%Y-%m-%d")
             row["Score"] = score_stock(row)
 
-            # Compute trade levels per row
+            # Compute trade levels per row so win-rate analysis works
             levels = compute_trade_levels(row)
             row["Entry"] = levels["Entry"]
             row["Stop_Loss"] = levels["Stop_Loss"]
@@ -122,7 +125,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 
 # ----------------- WORKER -----------------
 def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
-    """Worker function to extract the dataframe for each ticker."""
+    """Download, indicator-enrich and signal-compute one ticker."""
     LOGGER.info("Processing %s", ticker)
     df = fetch_ohlcv(ticker, start=start, end=end)
     if df.empty:
@@ -130,19 +133,22 @@ def worker(ticker: str, start: str, end: str) -> pd.DataFrame:
         return df
 
     df = compute_indicators(df)
-    df = df.dropna()  # drops NaN rows from rolling windows
+    df = df.dropna()  # drop NaN rows from rolling windows
 
     res = compute_signals(df)
-
     if res.empty:
         LOGGER.warning("No signals for %s, skipping.", ticker)
-
     return res
 
 
 # ---------------- BACKTEST ----------------
 def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataFrame:
     """Download data, compute indicators and signals for all tickers.
+
+    Args:
+        tickers: List of ticker symbols.
+        start_date: Start date string (YYYY-MM-DD).
+        end_date: End date string (YYYY-MM-DD).
 
     Returns:
         pd.DataFrame: Combined results across all tickers.
@@ -151,11 +157,7 @@ def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataF
     processes = {
         ticker: ThreadPool(processes=1).apply_async(
             func=worker,
-            args=(
-                ticker,
-                start_date,
-                end_date,
-            ),
+            args=(ticker, start_date, end_date),
         )
         for ticker in tickers
     }
@@ -166,6 +168,7 @@ def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataF
             continue
         result["Ticker"] = ticker
         all_results.append(result)
+
     if not all_results:
         LOGGER.warning("No results found across all tickers.")
         return pd.DataFrame()
@@ -203,12 +206,12 @@ def analyze_with_levels(df: pd.DataFrame) -> None:
 
     total = wins + losses
     win_rate = (wins / total * 100) if total > 0 else 0.0
-    LOGGER.info(f"Win Rate : {win_rate:.1f}%")
-    LOGGER.info(f"Wins     : {wins}")
-    LOGGER.info(f"Losses   : {losses}")
-    LOGGER.info(f"Open     : {still_open}")
+    LOGGER.info("Win Rate : %.1f%%", win_rate)
+    LOGGER.info("Wins     : %d", wins)
+    LOGGER.info("Losses   : %d", losses)
+    LOGGER.info("Open     : %d", still_open)
     if losses > 0:
-        LOGGER.info(f"W/L Ratio: {wins / losses:.2f}")
+        LOGGER.info("W/L Ratio: %.2f", wins / losses)
 
 
 # ---------------- FULL ANALYSIS ----------------
@@ -223,17 +226,17 @@ def analyze(df: pd.DataFrame) -> pd.DataFrame:
     """
     LOGGER.info("===== ANALYSIS =====")
     LOGGER.info("Total signals: %d", len(df))
-    LOGGER.info(f"Score range  : {df['Score'].min()} – {df['Score'].max()}")
-    LOGGER.info(f"Mean Score   : {df['Score'].mean():.1f}")
-    LOGGER.info(f"Mean RSI     : {df['RSI'].mean():.1f}")
-    LOGGER.info(f"Mean Change  : {df['Change'].apply(normalize_change).mean():.2f}%")
+    LOGGER.info("Score range  : %s – %s", df["Score"].min(), df["Score"].max())
+    LOGGER.info("Mean Score   : %.1f", df["Score"].mean())
+    LOGGER.info("Mean RSI     : %.1f", df["RSI"].mean())
+    LOGGER.info("Mean Change  : %.2f%%", df["Change"].apply(normalize_change).mean())
 
     analyze_with_levels(df)
 
     LOGGER.info("--- Score vs Forward Return Correlation ---")
     for d in FORWARD_DAYS:
         corr = df["Score"].corr(df[f"FWD_{d}D"])
-        LOGGER.info(f"Score vs {d}D Return: {corr:.3f}")
+        LOGGER.info("Score vs %dD Return: %.3f", d, corr)
 
     df["ScoreBucket"] = pd.qcut(df["Score"], 5, duplicates="drop")
     bucket_perf = df.groupby("ScoreBucket", observed=True)["FWD_5D"].mean()
@@ -285,68 +288,138 @@ def plot_results(df: pd.DataFrame) -> None:
     plt.close()
 
 
-# ---------------- HTML REPORT ----------------
+# ---------------- HTML REPORT (Jinja2) ----------------
+def _safe(v):
+    """Convert a value to a JSON-safe scalar (NaN/Inf → None, numpy scalars → Python)."""
+    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+        return None
+    if isinstance(v, float):
+        return round(v, 4)
+    if hasattr(v, "strftime"):
+        try:
+            return v.strftime("%Y-%m-%d")
+        except (ValueError, OSError):
+            return None
+    if hasattr(v, "item"):  # numpy scalar
+        return v.item()
+    return v
+
+
 def generate_html(df: pd.DataFrame) -> None:
-    """Generate HTML report with summary, charts and top signals.
+    """Render the Bootstrap backtest_report.html template via Jinja2 and write to disk.
+
+    Replaces the placeholder JS constants (SUMMARY_STATS, BUCKET_DATA, BT_DATA)
+    with live Python data by injecting them as Jinja2 variables.
 
     Args:
-        df: Backtest results DataFrame.
+        df: Backtest results DataFrame (output of run_backtest).
     """
-    top_signals = df.sort_values("Score", ascending=False).head(20)
+    # ── SUMMARY_STATS ──────────────────────────────────────────────────────
+    stat_cols = ["Score", "RSI", "ATR", "Change", "FWD_1D", "FWD_3D", "FWD_5D"]
+    available_stat_cols = [c for c in stat_cols if c in df.columns]
+    summary_stats = df[available_stat_cols].describe().round(3).to_dict()
+    # Flip to { stat_name: { ColA: val, … } } format expected by the template
+    summary_stats_flipped: dict = {}
+    for col, stat_dict in summary_stats.items():
+        for stat, val in stat_dict.items():
+            summary_stats_flipped.setdefault(stat, {})[col] = _safe(val)
 
-    # Flag rows where score >= 60 and 5D return was positive
-    top_signals = top_signals.copy()
-    top_signals["Result"] = top_signals.apply(lambda r: "✅ WIN" if r["FWD_5D"] > 0 else "❌ LOSS", axis=1)
+    # ── BUCKET_DATA ────────────────────────────────────────────────────────
+    bucket_data = []
+    try:
+        df_tmp = df.copy()
+        df_tmp["ScoreBucket"] = pd.qcut(df_tmp["Score"], 5, duplicates="drop")
+        for bucket, avg in df_tmp.groupby("ScoreBucket", observed=True)["FWD_5D"].mean().items():
+            label = f"{bucket.left:.1f} to {bucket.right:.1f}" if hasattr(bucket, "left") else str(bucket)
+            bucket_data.append({"range": label, "avg5d": _safe(avg)})
+    except Exception as err:
+        LOGGER.warning("Bucket data generation failed: %s", err)
 
-    html = f"""
-<html>
-<head>
-    <title>Backtest Report</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; padding: 20px; }}
-        h1 {{ color: #333; }}
-        h2 {{ color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
-        table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
-        th {{ background: #333; color: white; padding: 6px; }}
-        td {{ padding: 5px; border: 1px solid #ddd; }}
-        tr:nth-child(even) {{ background: #f9f9f9; }}
-        tbody tr:nth-child(even) td {{ background: #f9f9f9; }}
-        body.night tbody tr:nth-child(even) td {{ background: #2a2a2a; }}
-    </style>
-    <!-- CSS and JS for night mode -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
-    <script type="text/javascript" src="https://thevickypedia.github.io/open-source/nightmode/night.js" defer></script>
-    <link rel="stylesheet" type="text/css" href="https://thevickypedia.github.io/open-source/nightmode/night.css">
-</head>
-<body translate="no">
-    <div class="toggler fa fa-moon-o"></div>
-    <h1>Backtest Report</h1>
+    # ── BT_DATA (top 50 by score) ──────────────────────────────────────────
+    wanted_cols = [
+        "Date",
+        "Ticker",
+        "Score",
+        "TD_Signal",
+        "TD_Trend",
+        "YF_Signal",
+        "EMA_Cross",
+        "RSI",
+        "Change",
+        "ATR",
+        "Volume",
+        "Entry",
+        "Stop_Loss",
+        "Take_Profit",
+        "Risk_Reward",
+        "FWD_1D",
+        "FWD_3D",
+        "FWD_5D",
+    ]
+    available_cols = [c for c in wanted_cols if c in df.columns]
+    bt_data = []
+    for _, row in df.sort_values("Score", ascending=False).head(50)[available_cols].iterrows():
+        d = {c: _safe(row[c]) for c in available_cols}
+        fwd5 = d.get("FWD_5D")
+        d["Result"] = "WIN" if (fwd5 is not None and fwd5 > 0) else "LOSS"
+        bt_data.append(d)
 
-    <h2>Summary Statistics</h2>
-    {df[["Score", "RSI", "Change", "FWD_1D", "FWD_3D", "FWD_5D"]].describe().round(3).to_html()}
+    # ── KPI stats for header cards ─────────────────────────────────────────
+    wins = sum(
+        1
+        for _, r in df.iterrows()
+        if r.get("Entry")
+        and r.get("Stop_Loss")
+        and r.get("Take_Profit")
+        and float(r.get("Entry", 0)) * (1 + float(r.get("FWD_5D", 0)) / 100) >= float(r.get("Take_Profit", 0))
+    )
+    losses = sum(
+        1
+        for _, r in df.iterrows()
+        if r.get("Entry")
+        and r.get("Stop_Loss")
+        and r.get("Take_Profit")
+        and float(r.get("Entry", 0)) * (1 + float(r.get("FWD_5D", 0)) / 100) <= float(r.get("Stop_Loss", 0))
+    )
+    total_traded = wins + losses
+    win_rate = round(wins / total_traded * 100, 1) if total_traded > 0 else 0.0
 
-    <h2>Charts</h2>
-    <img src="scatter.png" width="700"/>
-    <img src="equity.png" width="700"/>
+    kpi = {
+        "total_signals": len(df),
+        "win_rate": win_rate,
+        "wins": wins,
+        "losses": losses,
+        "avg_fwd5d": round(float(df["FWD_5D"].mean()), 2) if "FWD_5D" in df.columns else 0,
+        "avg_score": round(float(df["Score"].mean()), 1),
+        "max_score": int(df["Score"].max()),
+        "avg_rsi": round(float(df["RSI"].mean()), 1) if "RSI" in df.columns else 0,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
-    <h2>Top 20 Signals by Score</h2>
-    {top_signals[["Ticker", "Score", "TD_Signal", "TD_Trend", "YF_Signal",
-                    "EMA_Cross", "RSI", "Change", "ATR", "Volume",
-                    "Entry", "Stop_Loss", "Take_Profit", "Risk_Reward",
-                    "FWD_1D", "FWD_3D", "FWD_5D", "Result"]].to_html(index=True)}
-</body>
-</html>
-    """
+    # ── Render ──────────────────────────────────────────────────────────────
+    template = _jinja_env.get_template("backtest_report.html")
+    html = template.render(
+        SUMMARY_STATS=json.dumps(summary_stats_flipped),
+        BUCKET_DATA=json.dumps(bucket_data),
+        BT_DATA=json.dumps(bt_data),
+        kpi=kpi,
+    )
 
     path = f"{OUTPUT_DIR}/report.html"
-    with open(path, "w") as f:
-        f.write(html)
-    LOGGER.info(f"Report saved to {path}")
+    with open(path, "w") as fh:
+        fh.write(html)
+    LOGGER.info("Backtest report saved to %s", path)
 
 
 # ---------------- Back Tester ----------------
 def backtester(tickers: List[str], start_date: str = START_DATE, end_date: str = END_DATE) -> None:
-    """Run full backtest pipeline: download, signal, analyze, plot, report."""
+    """Run full backtest pipeline: download, signal, analyze, plot, report.
+
+    Args:
+        tickers: List of ticker symbols.
+        start_date: Start date string (YYYY-MM-DD).
+        end_date: End date string (YYYY-MM-DD).
+    """
     df = run_backtest(tickers, start_date, end_date)
 
     if df.empty:

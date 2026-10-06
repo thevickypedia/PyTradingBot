@@ -1,4 +1,5 @@
 import math
+import pathlib
 from collections.abc import Generator
 from typing import Any, Dict, List, Tuple
 
@@ -7,6 +8,7 @@ import pandas as pd
 from finvizfinance.quote import finvizfinance
 from finvizfinance.screener.overview import Overview
 from finvizfinance.screener.technical import Technical
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from pytradingbot.constants import LOGGER, config
 from pytradingbot.resilience import (
@@ -38,6 +40,17 @@ FILTERED_COLUMNS = [
     "Latest_News",
     "Insider_Action",
 ]
+
+
+# TODO: Move this to module level
+#   Most functions can become asynchronous
+# Jinja2 environment — points at pytradingbot/templates/
+_TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+    autoescape=select_autoescape([]),  # HTML handled by template itself
+    keep_trailing_newline=True,
+)
 
 
 def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -451,7 +464,7 @@ def _screen(cls, filters):
     return s.screener_view()
 
 
-def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
+def builder(filepath: str = None, filters: dict | None = None, jinja_template: bool = True) -> pd.DataFrame:
     """Build enriched trading signal dataframe from Finviz scan + custom tickers.
 
     Args:
@@ -538,6 +551,16 @@ def builder(filepath: str = None, filters: dict | None = None) -> pd.DataFrame:
                 final_df.to_html(filepath, index=False)
             case _:
                 raise ValueError(f"Unsupported file format: .{ext}. Use .csv, .xlsx, .json, or .html")
+
+    if jinja_template:
+        # ── Render ──────────────────────────────────────────────────────────────
+        template = _jinja_env.get_template("main.html")
+        html = template.render(RAW_DATA=final_df.to_json(orient="records"))
+
+        path = "enriched.html"
+        with open(path, "w") as fh:
+            fh.write(html)
+        LOGGER.info("Backtest report saved to %s", path)
 
     return final_df
 
