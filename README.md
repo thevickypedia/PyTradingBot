@@ -13,7 +13,7 @@ PyTradingBot is a python based trading bot API.
 
 ## Summary
 
-PyTradingBot is a python based trading bot API based on FinViz screener fields, and Yahoo finance.
+PyTradingBot is a python-based trading bot API based on FinViz screener fields, and Yahoo finance.
 
 ## Installation
 

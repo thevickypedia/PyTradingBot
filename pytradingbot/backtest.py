@@ -10,10 +10,10 @@ import pandas as pd
 
 from pytradingbot.constants import LOGGER
 from pytradingbot.main import (
-    _jinja_env,
     compute_atr,
     compute_trade_levels,
     get_candle_signal,
+    jinja_env,
     normalize_change,
     score_stock,
 )
@@ -397,7 +397,7 @@ def generate_html(df: pd.DataFrame) -> None:
     }
 
     # ── Render ──────────────────────────────────────────────────────────────
-    template = _jinja_env.get_template("backtest_report.html")
+    template = jinja_env.get_template("backtest_report.html")
     html = template.render(
         SUMMARY_STATS=json.dumps(summary_stats_flipped),
         BUCKET_DATA=json.dumps(bucket_data),

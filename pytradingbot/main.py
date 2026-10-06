@@ -1,5 +1,4 @@
 import math
-import pathlib
 from collections.abc import Generator
 from typing import Any, Dict, List, Tuple
 
@@ -45,9 +44,8 @@ FILTERED_COLUMNS = [
 # TODO: Move this to module level
 #   Most functions can become asynchronous
 # Jinja2 environment — points at pytradingbot/templates/
-_TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
-_jinja_env = Environment(
-    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+jinja_env = Environment(
+    loader=FileSystemLoader(str(config.TEMPLATES_DIR)),
     autoescape=select_autoescape([]),  # HTML handled by template itself
     keep_trailing_newline=True,
 )
@@ -464,12 +462,13 @@ def _screen(cls, filters):
     return s.screener_view()
 
 
-def builder(filepath: str = None, filters: dict | None = None, jinja_template: bool = True) -> pd.DataFrame:
+def builder(filepath: str = None, filters: dict | None = None, use_template: bool = True) -> pd.DataFrame:
     """Build enriched trading signal dataframe from Finviz scan + custom tickers.
 
     Args:
         filepath: Optional path to save output (.csv, .xlsx, .json, .html).
         filters: Finviz filter dict. Falls back to config.DEFAULT_FILTERS.
+        use_template: Boolean to use Jinja2 template for output.
 
     Returns:
         pd.DataFrame: Enriched, scored, and trade-leveled DataFrame.
@@ -548,19 +547,16 @@ def builder(filepath: str = None, filters: dict | None = None, jinja_template: b
             case "json":
                 final_df.to_json(filepath, orient="records", lines=True)
             case "html":
-                final_df.to_html(filepath, index=False)
+                if use_template:
+                    # ── Render ──────────────────────────────────────────────────────────────
+                    template = jinja_env.get_template("main.html")
+                    html = template.render(RAW_DATA=final_df.to_json(orient="records"))
+                    with open(filepath, "w") as fh:
+                        fh.write(html)
+                else:
+                    final_df.to_html(filepath, index=False)
             case _:
                 raise ValueError(f"Unsupported file format: .{ext}. Use .csv, .xlsx, .json, or .html")
-
-    if jinja_template:
-        # ── Render ──────────────────────────────────────────────────────────────
-        template = _jinja_env.get_template("main.html")
-        html = template.render(RAW_DATA=final_df.to_json(orient="records"))
-
-        path = "enriched.html"
-        with open(path, "w") as fh:
-            fh.write(html)
-        LOGGER.info("Backtest report saved to %s", path)
 
     return final_df
 

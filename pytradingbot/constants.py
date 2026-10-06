@@ -43,6 +43,7 @@ def getenv(*args, default: str = None) -> str | None:
 _approved_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 
+# TODO: Convert to pydantic model
 # noinspection PyTypeChecker
 class Env:
     """Environment variables for pytradingbot.
@@ -54,6 +55,7 @@ class Env:
     # API Starter pack
     HOST: str = getenv("host", default="0.0.0.0")
     PORT: int = int(getenv("port", default="8080"))
+    TZ: ZoneInfo = ZoneInfo(getenv("tz", "TZ", default="UTC"))
     LOG_LEVEL: str = getenv("log_level", default="INFO").upper()
     assert (
         LOG_LEVEL in _approved_log_levels
