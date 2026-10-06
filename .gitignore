@@ -210,7 +210,7 @@ __marimo__/
 *.json
 !filters.json
 *.html
-!dashboard.html
+!*/templates/*.html
 *.xlsx
 *.csv
 *.db
