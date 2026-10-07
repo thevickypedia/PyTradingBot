@@ -24,7 +24,7 @@ def start() -> None:
     """Start server."""
     module_name = pathlib.Path(__file__)
     uvicorn.run(
-        host=env.HOST,
-        port=env.PORT,
+        host=env.host,
+        port=env.port,
         app=f"{module_name.parent.stem}.{module_name.stem}:{app.__name__}",
     )

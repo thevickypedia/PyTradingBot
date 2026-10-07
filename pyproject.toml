@@ -25,6 +25,7 @@ dependencies = [
     "matplotlib==3.11.*",
     "finvizfinance==1.5.*",
     "FastAPI-UI-Auth==0.4.*",
+    "pydantic_settings==2.15.*",
 ]
 
 [tool.setuptools]

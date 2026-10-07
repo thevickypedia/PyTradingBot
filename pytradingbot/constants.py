@@ -2,10 +2,19 @@ import json
 import logging
 import os
 import pathlib
-from datetime import datetime
+import socket
+from datetime import datetime, tzinfo
 from enum import StrEnum
 from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
+
+from pydantic import (
+    DirectoryPath,
+    Field,
+    NewPath,
+    PositiveInt,
+)
+from pydantic_settings import BaseSettings
 
 
 class ScanStatus(StrEnum):
@@ -21,85 +30,75 @@ class ScanStatus(StrEnum):
     ERROR = "error"
 
 
-def getenv(*args, default: str = None) -> str | None:
-    """Get an environment variable.
-
-    Args:
-        *args: One or more possible environment variable names to check (case-insensitive).
-        default: Default value to return if environment variable is not set.
-
-    Returns:
-        str:
-        Environment variable or default value if environment variable is not set.
-    """
-    keys = [key.upper() for key in args] + [k.lower() for k in args]
-    for key in keys:
-        if val := os.getenv(key):
-            return val
-    return default
-
-
 # Environment variables with defaults
-_approved_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+class LogLevel(StrEnum):
+    """Log levels for pytradingbot.
+
+    >>> LogLevel
+
+    """
+
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
 
 
-# TODO: Convert to pydantic model
-# noinspection PyTypeChecker
-class Env:
+class EnvConfig(BaseSettings):
     """Environment variables for pytradingbot.
 
-    >>> Env
+    >>> EnvConfig
 
     """
 
     # API Starter pack
-    HOST: str = getenv("host", default="0.0.0.0")
-    PORT: int = int(getenv("port", default="8080"))
-    TZ: ZoneInfo = ZoneInfo(getenv("tz", "TZ", default="UTC"))
-    LOG_LEVEL: str = getenv("log_level", default="INFO").upper()
-    assert (
-        LOG_LEVEL in _approved_log_levels
-    ), f"Invalid LOG_LEVEL value, must be one of {', '.join(_approved_log_levels)}"
-    LOGS_DIR: pathlib.Path = pathlib.Path(getenv("logs_dir", default="logs"))
-    DB_DIR: pathlib.Path = pathlib.Path(getenv("db_dir", "data_dir", default="data"))
+    host: str = socket.gethostbyname("localhost")
+    port: PositiveInt = 8080
+    tz: ZoneInfo | tzinfo = datetime.now().astimezone().tzinfo or ZoneInfo("UTC")
+    log_level: LogLevel = LogLevel(LogLevel.INFO)
+
+    data_dir: NewPath | DirectoryPath = pathlib.Path("data")
+    logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
 
     # Users may not trigger a new scan within this window after the last one completed.
-    SCAN_COOLDOWN_SECONDS: int = int(getenv("scan_cooldown_seconds", default="60"))
+    scan_cooldown_seconds: int = Field(60, ge=30, le=3600, description="Cooldown period in seconds between scans")
 
     # Credentials
-    USERNAME: str = getenv("username", "user")
-    PASSWORD: str = getenv("password", "pass")
-    TIMEOUT: int = int(getenv("timeout", "session_timeout", default="3600"))
+    username: str
+    password: str
+    timeout: int = 3600
 
-    TELEGRAM_BOT_TOKEN: str = getenv("telegram_bot_token", "telegram_token", "bot_token")
-    TELEGRAM_CHAT_IDS: List[int] = [
-        int(chat_id.strip())
-        for chat_id in (
-            getenv("telegram_chat_ids", "chat_ids", "telegram_chat_id", "chat_id", "bot_chat_ids", "bot_chat_id") or ""
-        ).split(",")
-        if chat_id.strip().isdigit()
-    ]
+    telegram_bot_token: str | None = None
+    telegram_chat_ids: List[int] | None = None
+
+    class Config:
+        """Environment variables configuration."""
+
+        env_file = os.getenv("ENV_FILE") or os.getenv("env_file") or ".env"
+        extra = "ignore"
 
 
-env = Env()
+# noinspection argument-list
+env = EnvConfig()
 
-env.DB_DIR.mkdir(parents=True, exist_ok=True)
-env.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+env.data_dir.mkdir(parents=True, exist_ok=True)
+env.logs_dir.mkdir(parents=True, exist_ok=True)
 
 LOGGER = logging.getLogger("pytradingbot")
-LOGGER.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
+LOGGER.setLevel(env.log_level)
 handler = logging.FileHandler(
-    filename=str(env.LOGS_DIR / f"pytradingbot_{datetime.now(env.TZ).strftime('%Y-%m-%d')}.log"),
+    filename=str(env.logs_dir / f"pytradingbot_{datetime.now(env.tz).strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
-handler.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
+handler.setLevel(env.log_level)
 handler.setFormatter(
     fmt=logging.Formatter(
         datefmt="%b-%d-%Y %I:%M:%S %p",
         fmt="%(asctime)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
     )
 )
-handler.formatter.converter = lambda ts: datetime.fromtimestamp(ts, env.TZ).timetuple()
+handler.formatter.converter = lambda ts: datetime.fromtimestamp(ts, env.tz).timetuple()
 if not LOGGER.handlers:
     LOGGER.addHandler(hdlr=handler)
 LOGGER.propagate = False
@@ -127,9 +126,9 @@ class Config:
     FILTER_OPTIONS: Dict[str, List[str]] = json.loads((TEMPLATES_DIR / "filters.json").read_text())
 
     # Datastore — SQLite3 for cross-platform compatibility
-    DB_PATH: str = str(env.DB_DIR / "scan_history.db")
+    DB_PATH: str = str(env.data_dir / "scan_history.db")
 
-    TICKERS_PATH: str = str(env.DB_DIR / "tickers.json")
+    TICKERS_PATH: str = str(env.data_dir / "tickers.json")
 
     # Scheduler defaults (all times are interpreted in America/New_York)
     MARKET_TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")

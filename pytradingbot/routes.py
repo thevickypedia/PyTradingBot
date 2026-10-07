@@ -51,8 +51,8 @@ def _cooldown_remaining(request: Request) -> int:
     if last is None:
         LOGGER.debug("Cooldown check for request returned 0 because no scan has completed yet.")
         return 0
-    elapsed = (datetime.now(env.TZ) - last).total_seconds()
-    remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
+    elapsed = (datetime.now(env.tz) - last).total_seconds()
+    remaining = max(0, int(env.scan_cooldown_seconds - elapsed))
     LOGGER.debug("Cooldown check for request returned %s seconds remaining.", remaining)
     return remaining
 
@@ -71,8 +71,8 @@ def _cooldown_remaining_app(app: FastAPI) -> int:
     if last is None:
         LOGGER.debug("App cooldown check returned 0 because no scan has completed yet.")
         return 0
-    elapsed = (datetime.now(env.TZ) - last).total_seconds()
-    remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
+    elapsed = (datetime.now(env.tz) - last).total_seconds()
+    remaining = max(0, int(env.scan_cooldown_seconds - elapsed))
     LOGGER.debug("App cooldown check returned %s seconds remaining.", remaining)
     return remaining
 
@@ -213,12 +213,12 @@ def _render(
         "schedule": getattr(request.app.state, "schedule_config", copy.deepcopy(config.DEFAULT_SCHEDULE)),
         "default_schedule": copy.deepcopy(config.DEFAULT_SCHEDULE),
         "cooldown_remaining": _cooldown_remaining(request),
-        "cooldown_seconds": env.SCAN_COOLDOWN_SECONDS,
+        "cooldown_seconds": env.scan_cooldown_seconds,
         "current_version": current_version,
         "pkg_version": version.__version__,
     }
 
-    if env.USERNAME and env.PASSWORD:
+    if env.username and env.password:
         args["logout"] = uiauth.enums.APIEndpoints.fastapi_logout.value
 
     if getattr(request.app.state, "scan_error"):
@@ -272,7 +272,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
         try:
             LOGGER.debug("Background scan task started for source: %s", source)
             df = await asyncio.to_thread(builder, filters=filters)
-            ts = datetime.now(env.TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
+            ts = datetime.now(env.tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
             LOGGER.debug("Getting signals for %s scan completed with %d records.", source, len(df))
             buy, sell, fallback = get_signals(df)
@@ -294,7 +294,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
 
             app.state.scan_data = data
             app.state.last_scan_ts = ts
-            app.state.last_scan_completed = datetime.now(env.TZ)
+            app.state.last_scan_completed = datetime.now(env.tz)
             app.state.scan_status = ScanStatus.DONE
             LOGGER.info("%s scan completed successfully at %s with %d records.", source, ts, len(data))
         except Exception as exc:
@@ -447,7 +447,7 @@ def get_logs(request: Request) -> JSONResponse:
     requested_name = request.query_params.get("filename")
 
     LOGGER.debug("Log viewer requested logs. include_all=%s filename=%s", include_all, requested_name)
-    files = sorted(env.LOGS_DIR.glob("pytradingbot_*.log"), reverse=True) if env.LOGS_DIR.exists() else []
+    files = sorted(env.logs_dir.glob("pytradingbot_*.log"), reverse=True) if env.logs_dir.exists() else []
     file_names = [file.name for file in files]
 
     if not files:

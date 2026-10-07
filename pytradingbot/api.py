@@ -217,13 +217,13 @@ app = FastAPI(title="Trading Bot Dashboard", lifespan=lifespan)
 # noinspection unresolved-references
 app.__name__ = "app"
 api_routes = get_routes()
-if all((env.USERNAME, env.PASSWORD)):
+if all((env.username, env.password)):
     LOGGER.info("UI auth is enabled for protected routes.")
     uiauth.protect(
         app=app,
-        username=env.USERNAME,
-        password=env.PASSWORD,
-        session_timeout=env.TIMEOUT,
+        username=env.username,
+        password=env.password,
+        session_timeout=env.timeout,
         routes=api_routes,
     )
 else:

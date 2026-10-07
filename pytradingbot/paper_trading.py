@@ -112,7 +112,7 @@ _TICK_SECONDS = 300  # evaluate every 5 minutes
 
 
 def _now() -> datetime:
-    return datetime.now(env.TZ)
+    return datetime.now(env.tz)
 
 
 def _ts() -> str:

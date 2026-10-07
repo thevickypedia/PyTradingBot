@@ -20,7 +20,7 @@ from pytradingbot.main import (
 from pytradingbot.resilience import fetch_ohlcv
 
 # ---------------- CONFIG ----------------
-TODAY = datetime.now(env.TZ)
+TODAY = datetime.now(env.tz)
 FORWARD_DAYS = [1, 3, 5]
 INITIAL_CAPITAL = 10_000
 END_DATE = (TODAY - timedelta(days=5)).strftime("%Y-%m-%d")
@@ -393,7 +393,7 @@ def generate_html(df: pd.DataFrame) -> None:
         "avg_score": round(float(df["Score"].mean()), 1),
         "max_score": int(df["Score"].max()),
         "avg_rsi": round(float(df["RSI"].mean()), 1) if "RSI" in df.columns else 0,
-        "generated_at": datetime.now(env.TZ).strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "generated_at": datetime.now(env.tz).strftime("%Y-%m-%d %H:%M:%S %Z"),
     }
 
     # ── Render ──────────────────────────────────────────────────────────────

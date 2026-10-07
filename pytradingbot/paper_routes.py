@@ -26,7 +26,7 @@ def _hold_time_str(entry_time_iso: str) -> str:
     """Convert entry time to hold time."""
     try:
         entry_dt = datetime.fromisoformat(entry_time_iso)
-        delta = datetime.now(env.TZ) - entry_dt
+        delta = datetime.now(env.tz) - entry_dt
         total = int(delta.total_seconds())
         h, rem = divmod(total, 3600)
         m = rem // 60

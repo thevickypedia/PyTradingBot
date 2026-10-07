@@ -174,7 +174,7 @@ async def backtest_run(request: Request, body: BacktestRequest) -> JSONResponse:
             request.app.state.backtest_result = None
         finally:
             request.app.state.backtest_running = False
-            request.app.state.backtest_finished_at = datetime.now(env.TZ).isoformat()
+            request.app.state.backtest_finished_at = datetime.now(env.tz).isoformat()
 
     asyncio.create_task(_task())
     LOGGER.info("Backtest started for tickers: %s", tickers)
