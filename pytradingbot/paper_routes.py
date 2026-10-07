@@ -1,13 +1,13 @@
 """FastAPI route handlers for the paper trading feature."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from pytradingbot import paper_storage
-from pytradingbot.constants import LOGGER
+from pytradingbot.constants import LOGGER, env
 
 
 class StartPaperRequest(BaseModel):
@@ -26,7 +26,7 @@ def _hold_time_str(entry_time_iso: str) -> str:
     """Convert entry time to hold time."""
     try:
         entry_dt = datetime.fromisoformat(entry_time_iso)
-        delta = datetime.now(timezone.utc) - entry_dt
+        delta = datetime.now(env.TZ) - entry_dt
         total = int(delta.total_seconds())
         h, rem = divmod(total, 3600)
         m = rem // 60

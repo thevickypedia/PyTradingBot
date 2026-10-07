@@ -44,11 +44,11 @@ If the unrealised loss exceeds disaster_pct the position is closed immediately
 import asyncio
 import math
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from pytradingbot import paper_storage, storage
-from pytradingbot.constants import LOGGER
+from pytradingbot.constants import LOGGER, env
 from pytradingbot.main import get_candle_signal
 from pytradingbot.resilience import fast_price, fetch_ohlcv
 
@@ -112,11 +112,11 @@ _TICK_SECONDS = 300  # evaluate every 5 minutes
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(env.TZ)
 
 
 def _ts() -> str:
-    return _now().strftime("%Y-%m-%d %H:%M:%S UTC")
+    return _now().strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
 class PaperTradingEngine:

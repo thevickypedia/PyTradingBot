@@ -89,7 +89,7 @@ env.LOGS_DIR.mkdir(parents=True, exist_ok=True)
 LOGGER = logging.getLogger("pytradingbot")
 LOGGER.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
 handler = logging.FileHandler(
-    filename=str(env.LOGS_DIR / f"pytradingbot_{datetime.now().strftime('%Y-%m-%d')}.log"),
+    filename=str(env.LOGS_DIR / f"pytradingbot_{datetime.now(env.TZ).strftime('%Y-%m-%d')}.log"),
     mode="a",
 )
 handler.setLevel(getattr(logging, env.LOG_LEVEL, logging.DEBUG))
@@ -99,6 +99,7 @@ handler.setFormatter(
         fmt="%(asctime)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
     )
 )
+handler.formatter.converter = lambda ts: datetime.fromtimestamp(ts, env.TZ).timetuple()
 if not LOGGER.handlers:
     LOGGER.addHandler(hdlr=handler)
 LOGGER.propagate = False

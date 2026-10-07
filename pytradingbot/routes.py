@@ -1,7 +1,6 @@
 import asyncio
 import copy
 import re
-import time
 from datetime import datetime
 from typing import Any, Dict
 
@@ -52,7 +51,7 @@ def _cooldown_remaining(request: Request) -> int:
     if last is None:
         LOGGER.debug("Cooldown check for request returned 0 because no scan has completed yet.")
         return 0
-    elapsed = (datetime.now() - last).total_seconds()
+    elapsed = (datetime.now(env.TZ) - last).total_seconds()
     remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("Cooldown check for request returned %s seconds remaining.", remaining)
     return remaining
@@ -72,7 +71,7 @@ def _cooldown_remaining_app(app: FastAPI) -> int:
     if last is None:
         LOGGER.debug("App cooldown check returned 0 because no scan has completed yet.")
         return 0
-    elapsed = (datetime.now() - last).total_seconds()
+    elapsed = (datetime.now(env.TZ) - last).total_seconds()
     remaining = max(0, int(env.SCAN_COOLDOWN_SECONDS - elapsed))
     LOGGER.debug("App cooldown check returned %s seconds remaining.", remaining)
     return remaining
@@ -273,7 +272,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
         try:
             LOGGER.debug("Background scan task started for source: %s", source)
             df = await asyncio.to_thread(builder, filters=filters)
-            ts = datetime.now().strftime("%Y-%m-%d %I:%M %p ") + time.strftime("%Z")
+            ts = datetime.now(env.TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
 
             LOGGER.debug("Getting signals for %s scan completed with %d records.", source, len(df))
             buy, sell, fallback = get_signals(df)
@@ -295,7 +294,7 @@ async def run_scan_job(app: FastAPI, filters: dict, source: str = "manual", bypa
 
             app.state.scan_data = data
             app.state.last_scan_ts = ts
-            app.state.last_scan_completed = datetime.now()
+            app.state.last_scan_completed = datetime.now(env.TZ)
             app.state.scan_status = ScanStatus.DONE
             LOGGER.info("%s scan completed successfully at %s with %d records.", source, ts, len(data))
         except Exception as exc:

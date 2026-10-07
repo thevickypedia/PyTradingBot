@@ -2,7 +2,7 @@
 
 import asyncio
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from pytradingbot.backtest import END_DATE, FORWARD_DAYS, START_DATE, run_backtest
-from pytradingbot.constants import LOGGER
+from pytradingbot.constants import LOGGER, env
 from pytradingbot.main import normalize_change
 
 
@@ -174,7 +174,7 @@ async def backtest_run(request: Request, body: BacktestRequest) -> JSONResponse:
             request.app.state.backtest_result = None
         finally:
             request.app.state.backtest_running = False
-            request.app.state.backtest_finished_at = datetime.now(timezone.utc).isoformat()
+            request.app.state.backtest_finished_at = datetime.now(env.TZ).isoformat()
 
     asyncio.create_task(_task())
     LOGGER.info("Backtest started for tickers: %s", tickers)
