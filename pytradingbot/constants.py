@@ -45,7 +45,34 @@ class LogLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
-class EnvConfig(BaseSettings):
+class PydanticEnvConfig(BaseSettings):
+    """Pydantic BaseSettings with custom order for loading environment variables.
+
+    >>> PydanticEnvConfig
+
+    """
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        """Customize the order of settings sources."""
+        # Precedence (first wins):
+        # 1. init > 2. file secrets > 3. dotenv > 4. env
+        return (
+            init_settings,
+            file_secret_settings,
+            dotenv_settings,
+            env_settings,
+        )
+
+
+class EnvConfig(PydanticEnvConfig):
     """Environment variables for pytradingbot.
 
     >>> EnvConfig
