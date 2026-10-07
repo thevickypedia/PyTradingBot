@@ -1,7 +1,7 @@
 import asyncio
 import copy
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict
 
 import uiauth
@@ -97,6 +97,44 @@ def _validate_time(value: str) -> str:
     return f"{h:02d}:{m:02d}"
 
 
+def _validate_window(window_id: str, start: str, end: str, interval_minutes: int | None = None) -> None:
+    """Validate schedule window.
+
+    Args:
+        window_id: Window identifier.
+        start: Start time in HH:MM 24-hour format.
+        end: End time in HH:MM 24-hour format.
+        interval_minutes: Interval in minutes.
+
+    Raises:
+        ValueError: If the window is invalid.
+    """
+    start_dt = datetime.strptime(start, "%H:%M")
+    end_dt = datetime.strptime(end, "%H:%M")
+    if start_dt == end_dt:
+        LOGGER.warning("Rejected schedule window %s because start and end were identical (%s).", window_id, start)
+        raise ValueError(f"Start [{start}] and end [{end}] cannot be the same for {window_id}.")
+    if start_dt > end_dt:
+        LOGGER.warning("Rejected schedule window %s because start (%s) was after end (%s).", window_id, start, end)
+        raise ValueError(f"Start [{start}] must be before end [{end}] for {window_id}.")
+    if not interval_minutes:
+        return
+    if interval_minutes <= 0 or interval_minutes > 240:
+        LOGGER.warning("Rejected schedule interval %s for window %s.", interval_minutes, window_id)
+        raise ValueError(f"Interval for {window_id} must be between 1 and 240 minutes.")
+    if end_dt - start_dt < timedelta(minutes=interval_minutes):
+        LOGGER.warning(
+            "Rejected schedule window %s because interval (%s) was longer than window duration [%s - %s].",
+            window_id,
+            interval_minutes,
+            start,
+            end,
+        )
+        raise ValueError(
+            f"Interval [{interval_minutes}] cannot exceed window duration [{start} - {end}] for {window_id}."
+        )
+
+
 # noinspection PyTypeChecker
 def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
     """Normalize schedule payload.
@@ -123,12 +161,7 @@ def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
         start = _validate_time(str(window.get("start", default_window["start"])))
         end = _validate_time(str(window.get("end", default_window["end"])))
         interval_minutes = int(window.get("interval_minutes", default_window["interval_minutes"]))
-        if interval_minutes <= 0 or interval_minutes > 240:
-            LOGGER.warning("Rejected schedule interval %s for window %s.", interval_minutes, window_id)
-            raise ValueError(f"Interval for {window_id} must be between 1 and 240 minutes.")
-        if start == end:
-            LOGGER.warning("Rejected schedule window %s because start and end were identical (%s).", window_id, start)
-            raise ValueError(f"Start and end cannot be the same for {window_id}.")
+        _validate_window(window_id, start, end, interval_minutes)
 
         normalized_windows.append(
             {
@@ -155,13 +188,7 @@ def _normalize_schedule(payload: ScheduleRequest) -> Dict[str, Any]:
         "run_time": _validate_time(str(after_hours_payload.get("run_time", after_hours_default["run_time"]))),
         "close": _validate_time(str(after_hours_payload.get("close", after_hours_default["close"]))),
     }
-    if after_hours["run_time"] >= after_hours["close"]:
-        LOGGER.warning(
-            "Rejected after-hours schedule because run_time=%s was not before close=%s.",
-            after_hours["run_time"],
-            after_hours["close"],
-        )
-        raise ValueError("after_hours.run_time must be before after_hours.close")
+    _validate_window("after_hours", after_hours["run_time"], after_hours["close"], None)
 
     LOGGER.info("Schedule payload normalized successfully. enabled=%s", payload.enabled)
 

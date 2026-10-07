@@ -86,7 +86,8 @@ def should_run_now(schedule: dict, now_est: datetime) -> bool:
 class ScanScheduler:
     """Background scheduler that evaluates schedule rules and triggers scans."""
 
-    def __init__(self, app: FastAPI, trigger_scan: ScanTrigger, tick_seconds: int = 20) -> None:
+    # TODO: Scheduled must have a last visit timestamp to avoid duplicate triggers within 1 minute
+    def __init__(self, app: FastAPI, trigger_scan: ScanTrigger, tick_seconds: int = 30) -> None:
         """Initialize the background scheduler."""
         self._app = app
         self._trigger_scan = trigger_scan
@@ -123,7 +124,7 @@ class ScanScheduler:
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self._tick_seconds)
-            except TimeoutError:
+            except asyncio.TimeoutError:
                 pass
         LOGGER.debug("Scheduler loop exited.")
 

@@ -1311,9 +1311,8 @@
                             </div>
                         </div>
                         <div class="ctrl-card-body">
-                            <p class="schedule-note">Scheduler checks every minute bucket and runs scans in the
-                                background based on this schedule. If an end time is earlier than its start time, that
-                                session continues past midnight into the next day.</p>
+                            <p class="schedule-note">Scheduler checks this bucket every 30s and runs scans in the
+                                background based on this schedule.</p>
 
                             <div class="custom-control custom-switch mb-3">
                                 <input type="checkbox" class="custom-control-input" id="scheduleEnabled">
@@ -2023,10 +2022,10 @@
     function validateSchedulePayload(payload) {
         for (const window of (payload.windows || [])) {
             if (!window.start || !window.end) {
-                return `Start and end are required for ${window.id}.`;
+                return `Start [${window.start}] and end [${window.end}] are required for ${window.id}.`;
             }
             if (window.start === window.end) {
-                return `Start and end cannot be the same for ${window.id}.`;
+                return `Start [${window.start}] and end [${window.end}] cannot be the same for ${window.id}.`;
             }
             if (!Number.isFinite(window.interval_minutes) || window.interval_minutes < 1 || window.interval_minutes > 240) {
                 return `Interval for ${window.id} must be between 1 and 240 minutes.`;
@@ -2034,10 +2033,10 @@
         }
 
         if (!payload.after_hours.run_time || !payload.after_hours.close) {
-            return 'After Hours run time and close time are required.';
+            return `After Hours run time [${payload.after_hours.run_time}] and close time [${payload.after_hours.close}] are required.`;
         }
         if (payload.after_hours.run_time >= payload.after_hours.close) {
-            return 'After Hours run time must be before close.';
+            return `After Hours run time [${payload.after_hours.run_time}] must be before close [${payload.after_hours.close}].`;
         }
 
         return null;
@@ -2060,6 +2059,7 @@
         const validationError = validateSchedulePayload(payload);
         if (validationError) {
             document.getElementById('scheduleStatus').textContent = `Save failed: ${validationError}`;
+            alert(`Schedule validation error:\n\n${validationError}`);
             return;
         }
 
@@ -2076,6 +2076,7 @@
             })
             .catch((err) => {
                 document.getElementById('scheduleStatus').textContent = `Save failed: ${err.message}`;
+                alert(`Schedule save failed:\n\n${err.message}`);
             });
     }
 
