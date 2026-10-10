@@ -796,7 +796,7 @@
         return `
   <tr class="${rowClass}">
     <td><span class="source-badge ${row.Source==='Manual'?'manual':''}">${row.Source}</span></td>
-    <td class="ticker-cell">${row.Ticker}</td>
+    <td class="ticker-cell"><a href="https://finance.yahoo.com/quote/${row.Ticker}" target="_blank">${row.Ticker}</a></td>
     <td class="price-cell">$${Number(row.Price).toFixed(2)}</td>
     <td>${fmtChange(row.Change)}</td>
     <td>${fmtVol(row.Volume)}</td>

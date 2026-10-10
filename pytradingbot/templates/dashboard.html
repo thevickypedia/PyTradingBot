@@ -1093,7 +1093,10 @@
                                             <td data-order="{{ s.Source }}">{{ s.Source }}</td>
 
                                             {# Ticker — sort alphabetically on raw ticker symbol #}
-                                            <td data-order="{{ s.Ticker }}"><span class="ticker">{{ s.Ticker }}</span>
+                                            <td data-order="{{ s.Ticker }}">
+                                                <span class="ticker">
+                                                    <a href="https://finance.yahoo.com/quote/{{ s.Ticker }}" target="_blank">{{ s.Ticker }}</a>
+                                                </span>
                                             </td>
 
                                             {# Price — sort on raw float #}
@@ -2416,7 +2419,7 @@
             const positions = status.open_positions || [];
             let posRows = positions.length === 0
                 ? `<tr><td colspan="6" class="text-center text-muted py-3" style="font-size:.82rem;">No open positions</td></tr>`
-                : positions.map(p => `<tr><td><span class="ticker">${_esc(p.ticker)}</span></td><td>${_esc(_fmt$(p.entry_price))}</td><td>${_esc(p.shares)}</td><td>${_esc(_fmt$(p.entry_value))}</td><td>${_esc(p.hold_time||'—')}</td><td>${_esc(p.status||'—')}</td></tr>`).join('');
+                : positions.map(p => `<tr><td><span class="ticker"><a href="https://finance.yahoo.com/quote/${_esc(p.Ticker)}" target="_blank">${_esc(p.Ticker)}</a></span></td><td>${_esc(_fmt$(p.entry_price))}</td><td>${_esc(p.shares)}</td><td>${_esc(_fmt$(p.entry_value))}</td><td>${_esc(p.hold_time||'—')}</td><td>${_esc(p.status||'—')}</td></tr>`).join('');
             return `<div class="row mb-3"><div class="col-12"><div class="paper-info-row">
             <div class="paper-info-cell"><div class="paper-info-label">Risk Level</div><div class="paper-info-value">${_riskBadge(status.risk_level)}</div></div>
             <div class="paper-info-cell"><div class="paper-info-label">Duration</div><div class="paper-info-value">${_esc(status.duration_days)} day${status.duration_days===1?'':'s'}</div></div>
@@ -2460,7 +2463,7 @@
             if (!trades || !trades.length) {
                 innerDiv.innerHTML = '<p class="text-muted" style="font-size:.78rem;margin:8px 0;">No trades recorded for this session.</p>'; return;
             }
-            const trRows = trades.map(t => `<tr><td><span class="ticker" style="font-size:.8rem;">${_esc(t.ticker)}</span></td><td>${t.action==='BUY'?'<span class="pill pill-buy">BUY</span>':'<span class="pill pill-sell">SELL</span>'}</td><td>${_esc(_fmt$(t.price))}</td><td>${_esc(t.shares)}</td><td>${_esc(_fmt$(t.value))}</td><td>${_fmtPnl(t.pnl)}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.reason||'—')}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.time||'—')}</td></tr>`).join('');
+            const trRows = trades.map(t => `<tr><td><span class="ticker" style="font-size:.8rem;"><a href="https://finance.yahoo.com/quote/${_esc(t.Ticker)}" target="_blank">${_esc(t.Ticker)}</a></span></td><td>${t.action==='BUY'?'<span class="pill pill-buy">BUY</span>':'<span class="pill pill-sell">SELL</span>'}</td><td>${_esc(_fmt$(t.price))}</td><td>${_esc(t.shares)}</td><td>${_esc(_fmt$(t.value))}</td><td>${_fmtPnl(t.pnl)}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.reason||'—')}</td><td style="color:var(--muted);font-size:.75rem;">${_esc(t.time||'—')}</td></tr>`).join('');
             innerDiv.innerHTML = `<table><thead><tr><th>Ticker</th><th>Action</th><th>Price</th><th>Shares</th><th>Value</th><th>P&amp;L</th><th>Reason</th><th>Time</th></tr></thead><tbody>${trRows}</tbody></table>`;
         };
 
@@ -2595,7 +2598,7 @@
             const sigRows = signals.map(r => `
                 <tr>
                     <td style="white-space:nowrap;color:var(--muted);font-size:.76rem;">${_esc(r.Date)}</td>
-                    <td><span class="ticker">${_esc(r.Ticker)}</span></td>
+                    <td><span class="ticker"><a href="https://finance.yahoo.com/quote/${_esc(r.Ticker)}" target="_blank">${_esc(r.Ticker)}</a></span></td>
                     <td>${_esc(r.Score)}</td>
                     <td>${_signalBadge(r.TD_Signal)}</td>
                     <td style="font-size:.78rem;">${_esc(r.TD_Trend)}</td>
