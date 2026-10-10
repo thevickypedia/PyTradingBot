@@ -1,7 +1,6 @@
 """FastAPI route handlers for the backtest feature."""
 
 import asyncio
-import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -10,7 +9,14 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from pytradingbot.backtest import END_DATE, FORWARD_DAYS, START_DATE, run_backtest
+from pytradingbot.backtest import (
+    END_DATE,
+    FORWARD_DAYS,
+    START_DATE,
+    _safe,
+    analyze_with_levels,
+    run_backtest,
+)
 from pytradingbot.constants import LOGGER, env
 from pytradingbot.main import normalize_change
 
@@ -27,22 +33,6 @@ class BacktestRequest(BaseModel):
     end_date: Optional[str] = None
 
 
-def _safe(v: Any) -> Any:
-    """Convert a value to a JSON-safe type."""
-    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
-        return None
-    if isinstance(v, float):
-        return round(v, 4)
-    if hasattr(v, "strftime"):
-        try:
-            return v.strftime("%Y-%m-%d")
-        except (ValueError, OSError):
-            return None
-    if hasattr(v, "item"):
-        return v.item()
-    return v
-
-
 def _run_backtest_sync(tickers: List[str], start_date: str, end_date: str) -> Dict[str, Any]:
     """Run backtest and return a serialisable result dict."""
     df = run_backtest(tickers, start_date, end_date)
@@ -56,25 +46,8 @@ def _run_backtest_sync(tickers: List[str], start_date: str, end_date: str) -> Di
         }
 
     total = len(df)
-    wins, losses, still_open = 0, 0, 0
-    for _, row in df.iterrows():
-        entry = row.get("Entry") or row.get("Close", 0)
-        stop = row.get("Stop_Loss")
-        target = row.get("Take_Profit")
-        fwd_5d = row.get("FWD_5D", 0)
-        if stop is None or target is None or entry == 0:
-            still_open += 1
-            continue
-        simulated_exit = float(entry) * (1 + float(fwd_5d) / 100)
-        if simulated_exit >= float(target):
-            wins += 1
-        elif simulated_exit <= float(stop):
-            losses += 1
-        else:
-            still_open += 1
 
-    total_traded = wins + losses
-    win_rate = (wins / total_traded * 100) if total_traded > 0 else 0.0
+    wins, losses, still_open, win_rate = analyze_with_levels(df)
     wl_ratio = round(wins / losses, 2) if losses > 0 else None
 
     correlation = {}
@@ -118,7 +91,7 @@ def _run_backtest_sync(tickers: List[str], start_date: str, end_date: str) -> Di
     for _, row in df.sort_values("Score", ascending=False)[available].iterrows():
         d = {c: _safe(row[c]) for c in available}
         fwd5 = d.get("FWD_5D")
-        d["Result"] = "WIN" if (fwd5 is not None and fwd5 > 0) else "LOSS"
+        d["Result"] = "WIN" if (fwd5 or 0 > 0) else "LOSS"
         signals_list.append(d)
 
     mean_change_raw = df["Change"].apply(normalize_change).mean()

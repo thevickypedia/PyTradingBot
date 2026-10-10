@@ -104,6 +104,7 @@ async def add_ticker(payload: TickerSubscription):
     if valid := [ticker for ticker, valid in status_flags.items() if valid]:
         ticker_manager.add(valid)
     if invalid := [ticker for ticker, valid in status_flags.items() if not valid]:
+        # noinspection unbound-local-variable
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, detail=f"Invalid ticker symbol(s): {', '.join(invalid)}"
         )

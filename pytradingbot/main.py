@@ -103,7 +103,7 @@ def enrich_ticker(ticker: str) -> pd.Series:
     )
 
 
-def get_candle_signal(ticker: str = None, df: pd.DataFrame = None) -> pd.Series:
+def get_candle_signal(ticker: str | None = None, df: pd.DataFrame | None = None) -> pd.Series:
     """Uses yfinance 5min candles for full signal analysis.
 
     See Also:
@@ -233,13 +233,14 @@ def compute_trade_levels(row: pd.Series) -> pd.Series:
 
 
 def score_stock(row: pd.Series) -> int:
-    """Score a stock from 0-100 based on momentum, volume, RSI, ATR, candles and insider action.
+    """Score a stock based on momentum, volume, RSI, ATR, candles and insider action.
 
     Args:
         row: DataFrame row with all enriched columns.
 
     Returns:
-        int: Score between -100 and 100.
+        int:
+        Score representing the stock's technical and insider signals.
     """
     score = 0
 
@@ -324,13 +325,15 @@ def score_stock(row: pd.Series) -> int:
         score -= 15  # genuine sale = red flag
 
     # ---- TREND CONFIRMATION (max 10 pts) ----
-    # SMA20/SMA50 from Finviz; EMA50/EMA200 proxies from backtest — both handled here
-    _sma20 = pd.to_numeric(row.get("SMA20", None), errors="coerce")
-    _sma50 = pd.to_numeric(row.get("SMA50", None), errors="coerce")
-    sma20 = float(_sma20) if pd.notna(_sma20) else 0.0
-    sma50 = float(_sma50) if pd.notna(_sma50) else 0.0
+    # SMA20/SMA50 from Finviz; missing or invalid values become NaN.
+    sma20_raw = pd.to_numeric(row.get("SMA20", float("nan")), errors="coerce")
+    sma50_raw = pd.to_numeric(row.get("SMA50", float("nan")), errors="coerce")
+
+    sma20 = float(sma20_raw) if pd.notna(sma20_raw) else 0.0
+    sma50 = float(sma50_raw) if pd.notna(sma50_raw) else 0.0
+
     if sma20 > 0 and sma50 > 0:
-        if sma20 > sma50 and price > sma20:
+        if sma50 < sma20 < price:
             score += 10  # price above both MAs, short above long — strong uptrend
         elif sma20 > sma50:
             score += 5  # MAs bullish aligned but price hasn't broken above yet
@@ -394,7 +397,7 @@ def jsonify_scan_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             return v
 
-    return [{k: _clean(v) for k, v in row.items()} for row in records]
+    return [{str(k): _clean(v) for k, v in row.items()} for row in records]
 
 
 def custom_tickers_builder(tickers: List[str]) -> Generator[Dict[str, Any], None, None]:
@@ -462,7 +465,7 @@ def _screen(cls, filters):
     return s.screener_view()
 
 
-def builder(filepath: str = None, filters: dict | None = None, use_template: bool = True) -> pd.DataFrame:
+def builder(filepath: str | None = None, filters: dict | None = None, use_template: bool = True) -> pd.DataFrame:
     """Build enriched trading signal dataframe from Finviz scan + custom tickers.
 
     Args:
@@ -495,7 +498,7 @@ def builder(filepath: str = None, filters: dict | None = None, use_template: boo
         merged_df = scan_df.merge(tech_df[["Ticker"] + tech_cols], on="Ticker", how="left")
 
     enriched = merged_df["Ticker"].apply(enrich_ticker)
-    merged_df = pd.concat([merged_df, enriched], axis=1)
+    merged_df: pd.DataFrame = pd.concat([merged_df, enriched], axis=1)
 
     signals = merged_df["Ticker"].apply(get_candle_signal)
     merged_df = pd.concat([merged_df, signals], axis=1)

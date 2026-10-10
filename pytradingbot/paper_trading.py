@@ -37,7 +37,7 @@ For each candidate the engine:
 72-Hour Rule
 ------------
 Every position is force-closed at max_hold_hours regardless of P&L.
-If the unrealised loss exceeds disaster_pct the position is closed immediately
+If the unrealized loss exceeds disaster_pct the position is closed immediately
 (the "complete disaster" exception), well before the 72 h wall.
 """
 
@@ -119,6 +119,7 @@ def _ts() -> str:
     return _now().strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
+# noinspection bad-argument-type,bad-return,unresolved-references
 class PaperTradingEngine:
     """Async background engine that simulates trades from pytradingbot scan signals.
 
@@ -440,7 +441,8 @@ class PaperTradingEngine:
             rs = gain / loss
             val = float((100 - (100 / (1 + rs))).iloc[-1])
             return val if not math.isnan(val) else None
-        except Exception:
+        except Exception as error:
+            LOGGER.warning("Failed to calculate live RSI for %s: %s", ticker, error)
             return None
 
     # ------------------------------------------------------------------ #

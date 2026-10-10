@@ -1,6 +1,7 @@
 """FastAPI route handlers for the paper trading feature."""
 
 from datetime import datetime
+from typing import Any, Dict
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from pytradingbot import paper_storage
 from pytradingbot.constants import LOGGER, env
+from pytradingbot.paper_trading import PaperTradingEngine
 
 
 class StartPaperRequest(BaseModel):
@@ -38,25 +40,25 @@ def _hold_time_str(entry_time_iso: str) -> str:
 
 async def paper_status(request: Request) -> JSONResponse:
     """Paper trading session status."""
-    engine = getattr(request.app.state, "paper_engine", None)
-    schedule_cfg = getattr(request.app.state, "schedule_config", {})
-    schedule_enabled = bool(schedule_cfg.get("enabled", False))
-
-    base = {
-        "is_running": False,
-        "schedule_enabled": schedule_enabled,
-        "risk_level": None,
-        "duration_days": None,
-        "started_at": None,
-        "starting_capital": None,
-        "available_capital": 0,
-        "current_value": 0,
-        "unrealised_pnl": 0,
-        "open_positions": [],
-    }
+    engine: PaperTradingEngine | None = getattr(request.app.state, "paper_engine", None)
+    schedule_cfg: Dict[str, Any] = getattr(request.app.state, "schedule_config", {})
+    schedule_enabled: bool = bool(schedule_cfg.get("enabled", False))
 
     if engine is None:
-        return JSONResponse(base)
+        return JSONResponse(
+            {
+                "is_running": False,
+                "schedule_enabled": schedule_enabled,
+                "risk_level": None,
+                "duration_days": None,
+                "started_at": None,
+                "starting_capital": None,
+                "available_capital": 0,
+                "current_value": 0,
+                "unrealised_pnl": 0,
+                "open_positions": [],
+            }
+        )
 
     raw = engine.get_status()
     session = raw.get("session") or {}
@@ -92,7 +94,7 @@ async def paper_status(request: Request) -> JSONResponse:
 
 async def paper_start(request: Request, body: StartPaperRequest) -> JSONResponse:
     """Start a new paper trading session."""
-    engine = getattr(request.app.state, "paper_engine", None)
+    engine: PaperTradingEngine | None = getattr(request.app.state, "paper_engine", None)
     if engine is None:
         return JSONResponse({"status": "error", "error": "Paper trading engine not initialised."}, status_code=500)
     if engine.is_running:
@@ -119,7 +121,7 @@ async def paper_start(request: Request, body: StartPaperRequest) -> JSONResponse
 
 async def paper_stop(request: Request) -> JSONResponse:
     """Stop a paper trading session."""
-    engine = getattr(request.app.state, "paper_engine", None)
+    engine: PaperTradingEngine | None = getattr(request.app.state, "paper_engine", None)
     if engine is None or not engine.is_running:
         return JSONResponse({"status": "not_running", "error": "No active paper trading session."}, status_code=400)
     await engine.stop_session()
@@ -127,7 +129,7 @@ async def paper_stop(request: Request) -> JSONResponse:
     return JSONResponse({"status": "stopped"})
 
 
-async def paper_history(request: Request) -> JSONResponse:
+async def paper_history() -> JSONResponse:
     """Get historical paper trading session history."""
     sessions = paper_storage.list_sessions()
     result = []

@@ -1,8 +1,9 @@
 import asyncio
 import copy
+import pathlib
 import re
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import uiauth
 from fastapi import FastAPI, Request
@@ -343,14 +344,14 @@ def dashboard(request: Request) -> HTMLResponse:
         HTMLResponse:
         Returns HTML response with rendered dashboard template.
     """
-    version = request.query_params.get("version")
-    LOGGER.debug("Dashboard requested. version=%s", version)
-    if version:
-        data = storage.load_version(version)
+    _version = request.query_params.get("version")
+    LOGGER.debug("Dashboard requested. version=%s", _version)
+    if _version:
+        data = storage.load_version(_version)
         if data is not None:
-            LOGGER.info("Rendering requested historical version %s with %d records.", version, len(data))
-            return _render(request, version_ts=version, version_data=data)
-        LOGGER.warning("Requested dashboard version %s was not found; falling back to latest view.", version)
+            LOGGER.info("Rendering requested historical version %s with %d records.", _version, len(data))
+            return _render(request, version_ts=_version, version_data=data)
+        LOGGER.warning("Requested dashboard version %s was not found; falling back to latest view.", _version)
     return _render(request)
 
 
@@ -474,7 +475,7 @@ def get_logs(request: Request) -> JSONResponse:
     requested_name = request.query_params.get("filename")
 
     LOGGER.debug("Log viewer requested logs. include_all=%s filename=%s", include_all, requested_name)
-    files = sorted(env.logs_dir.glob("pytradingbot_*.log"), reverse=True) if env.logs_dir.exists() else []
+    files: List[pathlib.Path] = sorted(env.logs_dir.glob("pytradingbot_*.log"), reverse=True)
     file_names = [file.name for file in files]
 
     if not files:

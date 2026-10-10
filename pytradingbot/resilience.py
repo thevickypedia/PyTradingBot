@@ -138,7 +138,8 @@ def fast_price(ticker) -> float:
                 v = float(fi[key])
                 if v > 0 and not math.isnan(v):
                     return v
-            except Exception:
+            except Exception as err:
+                LOGGER.warning("fast_info failed at key [%s] for %s: %s", key, ticker, err)
                 continue
     except Exception as err:
         LOGGER.warning("fast_info failed for %s: %s", ticker, err)

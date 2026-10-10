@@ -3,7 +3,7 @@ import math
 import os
 from datetime import datetime, timedelta
 from multiprocessing.pool import ThreadPool
-from typing import List
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -173,11 +173,12 @@ def run_backtest(tickers: List[str], start_date: str, end_date: str) -> pd.DataF
         LOGGER.warning("No results found across all tickers.")
         return pd.DataFrame()
 
-    return pd.concat(all_results, ignore_index=True).dropna(subset=["Score"])
+    contacted: pd.DataFrame = pd.concat(all_results, ignore_index=True)
+    return contacted.dropna(subset=["Score"])
 
 
 # ---------------- WIN RATE ANALYSIS ----------------
-def analyze_with_levels(df: pd.DataFrame) -> None:
+def analyze_with_levels(df: pd.DataFrame) -> Tuple[int, int, int, float | int]:
     """Simulate trade outcomes using stop loss and take profit levels.
 
     Args:
@@ -212,10 +213,11 @@ def analyze_with_levels(df: pd.DataFrame) -> None:
     LOGGER.info("Open     : %d", still_open)
     if losses > 0:
         LOGGER.info("W/L Ratio: %.2f", wins / losses)
+    return wins, losses, still_open, win_rate
 
 
 # ---------------- FULL ANALYSIS ----------------
-def analyze(df: pd.DataFrame) -> pd.DataFrame:
+def analyze(df: pd.DataFrame) -> pd.Series:
     """Run full statistical analysis on backtest results.
 
     Args:
